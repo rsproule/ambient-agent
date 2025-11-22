@@ -1,7 +1,9 @@
+import { type MessageAction } from "@/src/ai/respondToMessage";
 import {
-  respondToMessage,
-  type MessageAction,
-} from "@/src/ai/respondToMessage";
+  releaseResponseLock,
+  saveAssistantMessage,
+  shouldInterrupt,
+} from "@/src/db/conversation";
 import { task, wait } from "@trigger.dev/sdk/v3";
 import { LoopMessageService } from "loopmessage-sdk";
 
@@ -12,30 +14,59 @@ const client = new LoopMessageService({
 });
 
 type HandleMessageResponsePayload = {
-  message: string;
-  recipient: string;
-  message_id?: string;
+  conversationId: string; // phone number or group_id
+  recipient?: string;
   group?: string;
-  attachments?: string[];
+  actions: MessageAction[];
+  taskId: string; // Unique ID for this response task
 };
 
 export const handleMessageResponse = task({
   id: "handle-message-response",
   run: async (payload: HandleMessageResponsePayload) => {
-    // Generate AI response with actions
-    const actions = await respondToMessage(payload.message, {
-      message_id: payload.message_id,
-      attachments: payload.attachments,
-    });
+    try {
+      // Execute each action in sequence
+      for (let i = 0; i < payload.actions.length; i++) {
+        const action = payload.actions[i];
 
-    // Execute each action in sequence
-    for (const action of actions) {
-      // Apply delay if specified
-      if (action.delay) {
-        await wait.for({ seconds: action.delay / 1000 });
+        // Check for interrupt before each action (except the first)
+        if (i > 0) {
+          const interrupted = await shouldInterrupt(
+            payload.conversationId,
+            payload.taskId,
+          );
+          if (interrupted) {
+            console.log(
+              `Response interrupted for conversation ${payload.conversationId}, stopping at action ${i}/${payload.actions.length}`,
+            );
+            return {
+              interrupted: true,
+              actionsCompleted: i,
+              totalActions: payload.actions.length,
+            };
+          }
+        }
+
+        // Apply delay if specified
+        if (action.delay) {
+          await wait.for({ seconds: action.delay / 1000 });
+        }
+
+        await executeAction(action, payload);
+
+        // Save assistant messages to the database
+        if (action.type === "message") {
+          await saveAssistantMessage(payload.conversationId, action.text);
+        }
       }
 
-      await executeAction(action, payload);
+      return {
+        success: true,
+        actionsCompleted: payload.actions.length,
+      };
+    } finally {
+      // Always release the lock when done (success or failure)
+      await releaseResponseLock(payload.conversationId, payload.taskId);
     }
   },
 });
@@ -44,10 +75,22 @@ async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
 ) {
+  // Validate we have a recipient or group
+  if (!payload.group && !payload.recipient) {
+    throw new Error(
+      `Invalid payload: must have either recipient or group specified. Conversation ID: ${payload.conversationId}`,
+    );
+  }
+
   // recipient and group are mutually exclusive - only include the one that's present
   const baseParams = payload.group
     ? { group: payload.group }
-    : { recipient: payload.recipient };
+    : { recipient: payload.recipient! };
+
+  console.log(
+    `Executing ${action.type} action for conversation ${payload.conversationId}`,
+    baseParams,
+  );
 
   switch (action.type) {
     case "message":

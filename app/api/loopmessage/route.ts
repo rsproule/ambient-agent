@@ -1,9 +1,10 @@
+import { saveUserMessage } from "@/src/db/conversation";
 import type {
   LoopWebhook,
   MessageInboundWebhook,
   MessageReactionWebhook,
 } from "@/src/lib/loopmessage-sdk/types";
-import { handleMessageResponse } from "@/src/trigger/tasks/handleMessage";
+import { debouncedResponse } from "@/src/trigger/tasks/debouncedResponse";
 import { NextResponse } from "next/server";
 
 export async function POST(request: Request) {
@@ -35,12 +36,25 @@ type LoopInteractiveResponse = {
 async function inboundMessageHandler(
   webhook: MessageInboundWebhook,
 ): Promise<LoopInteractiveResponse> {
-  await handleMessageResponse.trigger({
-    message: webhook.text || "",
-    recipient: webhook.recipient || "",
-    message_id: webhook.message_id,
+  // Determine conversation identifier (phone number or group_id)
+  const conversationId = webhook.group?.group_id || webhook.recipient || "";
+  const isGroup = !!webhook.group;
+
+  // Save the message to the database
+  await saveUserMessage(
+    conversationId,
+    webhook.text || "",
+    webhook.recipient || "",
+    webhook.message_id,
+    isGroup,
+  );
+
+  // Trigger debounced response task
+  await debouncedResponse.trigger({
+    conversationId,
+    recipient: webhook.recipient,
     group: webhook.group?.group_id,
-    attachments: webhook.attachments,
+    timestampWhenTriggered: new Date().toISOString(),
   });
 
   return {

@@ -252,3 +252,4 @@ export interface WebhookResponse {
   /** Mark chat as read */
   read?: boolean;
 }
+

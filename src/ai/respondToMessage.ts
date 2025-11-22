@@ -1,12 +1,6 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
-import { generateObject } from "ai";
+import { generateObject, type ModelMessage } from "ai";
 import { z } from "zod";
-
-const openai = createOpenAI({
-  apiKey: process.env.ECHO_API_KEY,
-  baseURL: "https://echo.router.merit.systems",
-});
 
 const anthropic = createAnthropic({
   apiKey: process.env.ECHO_API_KEY,
@@ -86,16 +80,10 @@ const ResponseSchema = z.object({
 });
 
 export async function respondToMessage(
-  message: string,
-  context?: {
-    message_id?: string;
-    previous_messages?: Array<{ text: string; from: string }>;
-    attachments?: string[];
-  },
+  messages: ModelMessage[],
 ): Promise<MessageAction[]> {
   const before = performance.now();
   const { object } = await generateObject({
-    // model: openai("gpt-4o"),
     model: anthropic("claude-haiku-4-5-20251001"),
     schema: ResponseSchema,
     messages: [
@@ -103,46 +91,12 @@ export async function respondToMessage(
         role: "system",
         content: MR_WHISKERS_SYSTEM_PROMPT,
       },
-      {
-        role: "user",
-        content: buildUserPrompt(message, context),
-      },
+      ...messages,
     ],
   });
   const after = performance.now();
   console.log(`Time taken to generate actions: ${after - before}ms`);
   return object.actions;
-}
-
-function buildUserPrompt(
-  message: string,
-  context?: {
-    message_id?: string;
-    previous_messages?: Array<{ text: string; from: string }>;
-    attachments?: string[];
-  },
-): string {
-  let prompt = `User message: "${message}"`;
-
-  if (context?.attachments && context.attachments.length > 0) {
-    prompt += `\n\nAttachments: ${context.attachments.length} file(s) sent`;
-    prompt += `\nAttachment URLs:\n${context.attachments
-      .map((url, i) => `${i + 1}. ${url}`)
-      .join("\n")}`;
-  }
-
-  if (context?.message_id) {
-    prompt += `\n\nMessage ID (for reactions/replies): ${context.message_id}`;
-  }
-
-  if (context?.previous_messages && context.previous_messages.length > 0) {
-    prompt += `\n\nRecent conversation history:\n`;
-    prompt += context.previous_messages
-      .map((m) => `${m.from}: ${m.text}`)
-      .join("\n");
-  }
-
-  return prompt;
 }
 
 const MR_WHISKERS_SYSTEM_PROMPT = `
@@ -181,6 +135,7 @@ Generate an array of actions. Each action can be:
 
 Action Guidelines:
 - Use multiple message actions for fragmented thoughts (max 3-4 messages per response)
+- use between 1-4 message. you do not need to use all 4 unless it is a very long response.
 - Add realistic delays (500-3000ms) between messages for human-like pauses
 - Use effects sparingly (slam, loud, gentle) for emphasis
 - For quick acknowledgments, use reactions ONLY (like, love, thumbs up). Should be used sparingly, when full message is not needed.
