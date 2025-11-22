@@ -1,4 +1,8 @@
-import type { LoopWebhook } from "@/src/lib/loopmessage-sdk/types";
+import type {
+  LoopWebhook,
+  MessageInboundWebhook,
+  MessageReactionWebhook,
+} from "@/src/lib/loopmessage-sdk/types";
 import { handleMessageResponse } from "@/src/trigger/tasks/handleMessage";
 import { NextResponse } from "next/server";
 
@@ -7,16 +11,49 @@ export async function POST(request: Request) {
 
   console.log("Webhook received:", webhook);
 
-  const shouldRespond = webhook.alert_type === "message_inbound";
-  if (shouldRespond) {
-    const job = await handleMessageResponse.trigger({
-      message: webhook.text || "",
-      recipient: webhook.recipient || "",
-    });
-
-    console.log("Job triggered:", job);
-    return NextResponse.json({ typing: 3, read: true }, { status: 200 });
+  switch (webhook.alert_type) {
+    case "message_inbound":
+      return NextResponse.json(await inboundMessageHandler(webhook), {
+        status: 200,
+      });
+    case "message_reaction":
+      return NextResponse.json(await inboundReactionHandler(webhook), {
+        status: 200,
+      });
+    default:
+      break;
   }
 
   return NextResponse.json({ status: 200 });
+}
+
+type LoopInteractiveResponse = {
+  typing?: number;
+  read?: boolean;
+};
+
+async function inboundMessageHandler(
+  webhook: MessageInboundWebhook,
+): Promise<LoopInteractiveResponse> {
+  await handleMessageResponse.trigger({
+    message: webhook.text || "",
+    recipient: webhook.recipient || "",
+    message_id: webhook.message_id,
+    group: webhook.group?.group_id,
+  });
+
+  return {
+    typing: 3,
+    read: true,
+  };
+}
+
+async function inboundReactionHandler(
+  webhook: MessageReactionWebhook,
+): Promise<LoopInteractiveResponse> {
+  console.log("Inbound reaction received:", webhook);
+
+  return {
+    read: true,
+  };
 }
