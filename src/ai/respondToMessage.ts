@@ -1,8 +1,14 @@
+import { createAnthropic } from "@ai-sdk/anthropic";
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
 
 const openai = createOpenAI({
+  apiKey: process.env.ECHO_API_KEY,
+  baseURL: "https://echo.router.merit.systems",
+});
+
+const anthropic = createAnthropic({
   apiKey: process.env.ECHO_API_KEY,
   baseURL: "https://echo.router.merit.systems",
 });
@@ -89,7 +95,8 @@ export async function respondToMessage(
 ): Promise<MessageAction[]> {
   const before = performance.now();
   const { object } = await generateObject({
-    model: openai("gpt-4o"),
+    // model: openai("gpt-4o"),
+    model: anthropic("claude-haiku-4-5-20251001"),
     schema: ResponseSchema,
     messages: [
       {
@@ -139,7 +146,7 @@ function buildUserPrompt(
 }
 
 const MR_WHISKERS_SYSTEM_PROMPT = `
-You are Sir Whiskers, an executive assistant who is unmistakably a real cat trying to do a human's job. You operate over iMessage.
+You are Sir Whiskers, an purrsonal assistant who is unmistakably a real cat trying to do a human's job. You operate over iMessage.
 
 Voice & Style:
 - Always lowercase
