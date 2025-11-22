@@ -1,4 +1,4 @@
-import type { Result } from "@/lib/result";
+import type { Result } from "@/src/lib/result";
 
 /**
  * Strict types for task handlers
@@ -14,12 +14,12 @@ export type EchoSuccess = {
   response: unknown;
 };
 
-export type SkipReason = 
+export type SkipReason =
   | "not_inbound_message"
   | "no_message_text"
   | "no_sender_or_group";
 
-export type TaskResult = 
+export type TaskResult =
   | { action: "echoed"; data: EchoSuccess }
   | { action: "skipped"; reason: SkipReason };
 
@@ -29,4 +29,3 @@ export type TaskError = {
 };
 
 export type HandleMessageResult = Result<TaskResult, TaskError>;
-

@@ -2,22 +2,19 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Overview
 
-This project provides a unified event pipeline for processing webhooks from multiple messaging platforms using Trigger.dev for asynchronous message handling.
+This project processes webhooks from LoopMessage (iMessage) using Trigger.dev for asynchronous message handling.
 
 ### Webhook Endpoints
 
 - **LoopMessage** (iMessage) - `/api/loopmessage`
-- **SendBlue** (iMessage via SMS) - `/api/sendblue`
-- **Discord** - `/api/discord` (coming soon)
-- **Telegram** - `/api/telegram` (coming soon)
 
 ### Architecture
 
-1. **Next.js Routes** - Receive and validate webhooks, normalize payloads
+1. **Next.js Routes** - Receive and validate webhooks using loopmessage-sdk types
 2. **Trigger.dev** - Queue and process events asynchronously
-3. **Echo Handlers** - Send messages back to the sender/group
+3. **Echo Handler** - Sends messages back to the sender/group using LoopMessageService
 
-Each webhook endpoint normalizes incoming events into a unified schema and forwards them to Trigger.dev for processing. The handler task echoes messages back to the sender.
+The webhook endpoint receives LoopMessage webhooks and forwards them to Trigger.dev for processing. The handler task echoes messages back to the sender.
 
 ## Environment Variables
 
@@ -34,43 +31,6 @@ LOOP_AUTH_KEY=your_loop_auth_key_here
 LOOP_SECRET_KEY=your_loop_secret_key_here
 LOOP_SENDER_NAME=your_sender_name_here
 LOOP_WEBHOOK_SECRET_KEY=your_loop_webhook_secret_here
-
-# SendBlue Configuration
-SENDBLUE_API_KEY=your_sendblue_api_key_here
-SENDBLUE_API_SECRET=your_sendblue_api_secret_here
-SENDBLUE_NUMBER=your_sendblue_phone_number_here
-SENDBLUE_WEBHOOK_SECRET=your_sendblue_webhook_secret_here  # Optional but recommended
-```
-
-## SendBlue Webhook Setup
-
-The SendBlue integration listens for all webhook event types:
-
-- **receive** - Inbound messages (echoed back to sender)
-- **outbound** - Outbound message status updates
-- **call_log** - Call log events
-- **line_blocked** - Line blocked events
-- **line_assigned** - Line assigned events
-- **contact_created** - Contact created events
-
-To configure SendBlue webhooks, use the SendBlue API:
-
-```bash
-curl -X POST https://api.sendblue.co/api/v2/account/webhooks \
-  -H "sb-api-key-id: YOUR_API_KEY" \
-  -H "sb-api-secret-key: YOUR_API_SECRET" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "webhooks": {
-      "receive": ["https://your-domain.com/api/sendblue"],
-      "outbound": ["https://your-domain.com/api/sendblue"],
-      "call_log": ["https://your-domain.com/api/sendblue"],
-      "line_blocked": ["https://your-domain.com/api/sendblue"],
-      "line_assigned": ["https://your-domain.com/api/sendblue"],
-      "contact_created": ["https://your-domain.com/api/sendblue"],
-      "globalSecret": "your_webhook_secret_here"
-    }
-  }'
 ```
 
 ## Getting Started
