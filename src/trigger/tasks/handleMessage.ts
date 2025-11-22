@@ -42,10 +42,10 @@ async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
 ) {
-  const baseParams = {
-    recipient: payload.recipient,
-    group: payload.group,
-  };
+  // recipient and group are mutually exclusive - only include the one that's present
+  const baseParams = payload.group
+    ? { group: payload.group }
+    : { recipient: payload.recipient };
 
   switch (action.type) {
     case "message":
