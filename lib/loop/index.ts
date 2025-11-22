@@ -1,11 +1,10 @@
 /**
- * LoopMessage SDK - Custom wrapper with runtime validation
+ * LoopMessage SDK - Schemas and webhook utilities
  * 
- * This is a lightweight wrapper around the official loopmessage-sdk
- * with proper types that match the actual API and Zod validation.
+ * For sending messages, use the LoopMessageService from 'loopmessage-sdk' directly.
  */
 
 export * from "./schemas";
-export * from "./client";
 export * from "./webhooks";
+
 

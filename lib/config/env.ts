@@ -26,6 +26,9 @@ const envSchema = z.object({
   SENDBLUE_NUMBER: z.string().min(1, "SENDBLUE_NUMBER is required"),
   SENDBLUE_WEBHOOK_SECRET: z.string().optional(),
   
+  // AI configuration
+  ECHO_API_KEY: z.string().min(1, "ECHO_API_KEY is required"),
+  
   // Node environment
   NODE_ENV: z.enum(["development", "production", "test"]).optional().default("development"),
 });
@@ -81,6 +84,10 @@ export const sendblueConfig = {
   get apiSecret() { return env.SENDBLUE_API_SECRET; },
   get number() { return env.SENDBLUE_NUMBER; },
   get webhookSecret() { return env.SENDBLUE_WEBHOOK_SECRET; },
+};
+
+export const aiConfig = {
+  get echoApiKey() { return env.ECHO_API_KEY; },
 };
 
 export type Env = z.infer<typeof envSchema>;

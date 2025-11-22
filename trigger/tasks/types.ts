@@ -14,13 +14,22 @@ export type EchoSuccess = {
   response: unknown;
 };
 
+export type RespondSuccess = {
+  target: MessageTarget;
+  messageText: string;
+  response: unknown;
+};
+
 export type SkipReason = 
   | "not_inbound_message"
   | "no_message_text"
-  | "no_sender_or_group";
+  | "no_sender_or_group"
+  | "decided_not_to_respond"
+  | string;
 
 export type TaskResult = 
   | { action: "echoed"; data: EchoSuccess }
+  | { action: "responded"; data: RespondSuccess }
   | { action: "skipped"; reason: SkipReason };
 
 export type TaskError = {

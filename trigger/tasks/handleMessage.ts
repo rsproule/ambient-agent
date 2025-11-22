@@ -1,30 +1,33 @@
+import { DirectRespondAgent } from "@/lib/ai/agents/direct-respond";
+import type { MessageContext } from "@/lib/ai/types";
 import type { IncomingEventPayload } from "@/lib/events/schema";
-import { LoopClient } from "@/lib/loop/client";
 import { Err, Ok, tryAsync } from "@/lib/result";
 import { task } from "@trigger.dev/sdk/v3";
+import { LoopMessageService } from "loopmessage-sdk";
 import { SendblueAPI } from "sendblue";
 import type { HandleMessageResult } from "./types";
 
 /**
  * Handle Message Task
  *
- * Processes incoming message events from all sources and echoes them back.
+ * Processes incoming message events from all sources and sends AI-generated responses.
  */
 
 // Lazy client initialization
-let loopClient: LoopClient | null = null;
+let loopService: LoopMessageService | null = null;
 let sendblueClient: SendblueAPI | null = null;
+let directRespondAgent: DirectRespondAgent | null = null;
 
-function getLoopClient(): LoopClient {
-  if (!loopClient) {
-    loopClient = new LoopClient({
+function getLoopService(): LoopMessageService {
+  if (!loopService) {
+    loopService = new LoopMessageService({
       loopAuthKey: process.env.LOOP_AUTH_KEY!,
       loopSecretKey: process.env.LOOP_SECRET_KEY!,
       senderName: process.env.LOOP_SENDER_NAME!,
       logLevel: "info",
     });
   }
-  return loopClient;
+  return loopService;
 }
 
 function getSendblueClient(): SendblueAPI {
@@ -35,6 +38,26 @@ function getSendblueClient(): SendblueAPI {
     });
   }
   return sendblueClient;
+}
+
+function getDirectRespondAgent(): DirectRespondAgent {
+  if (!directRespondAgent) {
+    directRespondAgent = new DirectRespondAgent();
+  }
+  return directRespondAgent;
+}
+
+/**
+ * Simple helper to decide if we should respond to a message
+ */
+function shouldRespond(messageText: string): boolean {
+  // Skip empty messages
+  if (!messageText?.trim()) {
+    return false;
+  }
+
+  // Add your logic here - for now, respond to everything
+  return true;
 }
 
 export const handleMessage = task({
@@ -93,14 +116,39 @@ async function handleLoopMessage(
     messageText,
   });
 
-  const client = getLoopClient();
+  // Quick decision: should we respond?
+  if (!shouldRespond(messageText)) {
+    return Ok({
+      action: "skipped",
+      reason: "decided_not_to_respond",
+    });
+  }
+
+  // Create message context for AI
+  const messageContext: MessageContext = {
+    text: messageText,
+    sender: sender || "unknown",
+    groupId,
+  };
+
+  // Generate AI response
+  const agent = getDirectRespondAgent();
+  const aiResponse = await agent.respond(messageContext);
+  const responseText = aiResponse.responseText;
+
+  console.log("[HandleMessage][AI Response]", {
+    responseText,
+    reasoning: aiResponse.reasoning,
+  });
+
+  const loopService = getLoopService();
 
   // Send to group
   if (groupId) {
     const result = await tryAsync(() =>
-      client.sendMessage({
+      loopService.sendLoopMessage({
         group: groupId,
-        text: messageText,
+        text: responseText,
       }),
     );
 
@@ -112,10 +160,10 @@ async function handleLoopMessage(
     }
 
     return Ok({
-      action: "echoed",
+      action: "responded",
       data: {
         target: { type: "group", groupId },
-        messageText,
+        messageText: responseText,
         response: result.value,
       },
     });
@@ -124,9 +172,9 @@ async function handleLoopMessage(
   // Send to individual
   if (sender) {
     const result = await tryAsync(() =>
-      client.sendMessage({
+      loopService.sendLoopMessage({
         recipient: sender,
-        text: messageText,
+        text: responseText,
       }),
     );
 
@@ -138,10 +186,10 @@ async function handleLoopMessage(
     }
 
     return Ok({
-      action: "echoed",
+      action: "responded",
       data: {
         target: { type: "individual", recipient: sender },
-        messageText,
+        messageText: responseText,
         response: result.value,
       },
     });
@@ -168,15 +216,39 @@ async function handleSendblueMessage(
     });
   }
 
+  // Quick decision: should we respond?
+  if (!shouldRespond(messageText)) {
+    return Ok({
+      action: "skipped",
+      reason: "decided_not_to_respond",
+    });
+  }
+
+  // Create message context for AI
+  const messageContext: MessageContext = {
+    text: messageText,
+    sender: fromNumber,
+  };
+
+  // Generate AI response
+  const agent = getDirectRespondAgent();
+  const aiResponse = await agent.respond(messageContext);
+  const responseText = aiResponse.responseText;
+
+  console.log("[HandleMessage][AI Response]", {
+    responseText,
+    reasoning: aiResponse.reasoning,
+  });
+
   const client = getSendblueClient();
 
-  // Echo the message back
+  // Send AI-generated response
   const result = await tryAsync(() =>
     client.messages.send({
-      content: messageText,
+      content: responseText,
       from_number: process.env.SENDBLUE_NUMBER!,
       number: fromNumber,
-      send_style: "echo",
+      send_style: "invisible",
     }),
   );
 
@@ -188,10 +260,10 @@ async function handleSendblueMessage(
   }
 
   return Ok({
-    action: "echoed",
+    action: "responded",
     data: {
       target: { type: "individual", recipient: fromNumber },
-      messageText,
+      messageText: responseText,
       response: result.value,
     },
   });

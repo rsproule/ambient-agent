@@ -111,3 +111,4 @@ export type MessageReadWebhook = z.infer<typeof messageReadSchema>;
 export type AuthResponseWebhook = z.infer<typeof authResponseSchema>;
 export type GroupCreatedWebhook = z.infer<typeof groupCreatedSchema>;
 
+

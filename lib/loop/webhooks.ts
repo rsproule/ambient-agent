@@ -78,4 +78,3 @@ export function isMessageReaction(
 ): webhook is Extract<LoopWebhook, { alert_type: "message_reaction" }> {
   return webhook.alert_type === "message_reaction";
 }
-
