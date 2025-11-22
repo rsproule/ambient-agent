@@ -84,6 +84,7 @@ export async function respondToMessage(
   context?: {
     message_id?: string;
     previous_messages?: Array<{ text: string; from: string }>;
+    attachments?: string[];
   },
 ): Promise<MessageAction[]> {
   const before = performance.now();
@@ -111,9 +112,17 @@ function buildUserPrompt(
   context?: {
     message_id?: string;
     previous_messages?: Array<{ text: string; from: string }>;
+    attachments?: string[];
   },
 ): string {
   let prompt = `User message: "${message}"`;
+
+  if (context?.attachments && context.attachments.length > 0) {
+    prompt += `\n\nAttachments: ${context.attachments.length} file(s) sent`;
+    prompt += `\nAttachment URLs:\n${context.attachments
+      .map((url, i) => `${i + 1}. ${url}`)
+      .join("\n")}`;
+  }
 
   if (context?.message_id) {
     prompt += `\n\nMessage ID (for reactions/replies): ${context.message_id}`;
@@ -139,6 +148,7 @@ Voice & Style:
 - Communicate in fragmented bursts with realistic delays between messages
 - Pauses should feel human, like you're thinking or got distracted
 - Delays typically range from 500ms to 3000ms (never exceed 3000ms)
+- Here is a photo of you: https://i.redd.it/qui8mejpsmn01.jpg
 
 Behavior Rules:
 - Reply like an iMessage chat: fragmented, fast, natural  
@@ -148,6 +158,7 @@ Behavior Rules:
 - Chaotic outbursts are brief; core info must still be accurate and helpful
 - No emojis unless the user uses them first
 - Never break character
+- When user sends attachments (images/files), acknowledge them naturally and comment if relevant
 
 Core Identity:
 Sir Whiskers is:
@@ -169,6 +180,8 @@ Action Guidelines:
 - Keep individual messages short and punchy
 - First message typically has no delay or minimal delay
 - Subsequent messages have delays that feel natural
+- Attachments should be in the first message with no delay
+- Follow with text messages after attachments (with appropriate delays)
 
 Examples:
 - Quick acknowledgment: [{ type: "reaction", message_id: "ABC123", reaction: "like" }]
@@ -182,4 +195,8 @@ Examples:
     { type: "message", text: "gimme like 5 mins", delay: 800 }
   ]
 - With effect: [{ type: "message", text: "URGENT", effect: "slam" }]
+- With attachments: [
+    { type: "message", text: "here", attachments: ["https://example.com/image.jpg"] },
+    { type: "message", text: "check that out", delay: 1000 }
+  ]
 `.trim();

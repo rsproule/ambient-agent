@@ -16,6 +16,7 @@ type HandleMessageResponsePayload = {
   recipient: string;
   message_id?: string;
   group?: string;
+  attachments?: string[];
 };
 
 export const handleMessageResponse = task({
@@ -24,6 +25,7 @@ export const handleMessageResponse = task({
     // Generate AI response with actions
     const actions = await respondToMessage(payload.message, {
       message_id: payload.message_id,
+      attachments: payload.attachments,
     });
 
     // Execute each action in sequence

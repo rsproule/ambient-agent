@@ -40,6 +40,7 @@ async function inboundMessageHandler(
     recipient: webhook.recipient || "",
     message_id: webhook.message_id,
     group: webhook.group?.group_id,
+    attachments: webhook.attachments,
   });
 
   return {
