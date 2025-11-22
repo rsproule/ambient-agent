@@ -15,6 +15,24 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Mr. Whiskers",
   description: "Purrsonal Assistant",
+  openGraph: {
+    title: "Mr. Whiskers",
+    description: "Purrsonal Assistant",
+    images: [
+      {
+        url: "/whiskerspfp.jpg",
+        width: 1200,
+        height: 1200,
+        alt: "Mr. Whiskers",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Mr. Whiskers",
+    description: "Purrsonal Assistant",
+    images: ["/whiskerspfp.jpg"],
+  },
 };
 
 export default function RootLayout({
