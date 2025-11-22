@@ -2,7 +2,7 @@ import Image from "next/image";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-950">
+    <div className="flex min-h-dvh items-center justify-center bg-linear-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-950">
       <main className="flex flex-col items-center gap-8 p-8 text-center max-w-md">
         <div className="relative w-48 h-48 rounded-full overflow-hidden shadow-2xl ring-4 ring-white dark:ring-zinc-800">
           <Image
