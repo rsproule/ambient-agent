@@ -9,9 +9,16 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@trigger.dev/sdk": "^4.1.1",
+    "discord.js": "^14.25.0",
+    "dotenv": "^17.2.3",
+    "loopmessage-sdk": "^0.1.2",
     "next": "16.0.3",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "sendblue": "^2.0.1",
+    "telegraf": "^4.16.3",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
