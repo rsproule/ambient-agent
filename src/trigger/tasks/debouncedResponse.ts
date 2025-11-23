@@ -1,4 +1,5 @@
 import { respondToMessage } from "@/src/ai/respondToMessage";
+import { mrWhiskersAgent } from "@/src/ai/agents/mrWhiskers";
 import {
   acquireResponseLock,
   getConversationMessages,
@@ -97,7 +98,7 @@ export const debouncedResponse = task({
 
     // Generate AI response with full conversation context
     try {
-      const actions = await respondToMessage(messages, context);
+      const actions = await respondToMessage(mrWhiskersAgent, messages, context);
 
       // If no actions, we're done (e.g., group chat where no response is needed)
       if (actions.length === 0) {
