@@ -1,7 +1,7 @@
-import { PrismaClient } from "@/src/generated/prisma";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { attachDatabasePool } from "@vercel/functions";
 import { Pool } from "pg";
+import { PrismaClient } from "../generated/prisma";
 
 // Create connection pool
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
