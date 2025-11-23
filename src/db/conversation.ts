@@ -10,6 +10,12 @@ export interface ConversationMessage {
   createdAt: Date;
 }
 
+export interface ConversationContext {
+  isGroup: boolean;
+  summary?: string; // Optional: compressed context summary for future use
+  // Future: can add more context fields here (preferences, history, etc.)
+}
+
 /**
  * Get or create a conversation by conversationId (phone number or group_id)
  */
@@ -88,11 +94,12 @@ export async function saveAssistantMessage(
 
 /**
  * Get the last N messages for a conversation in AI SDK format
+ * Returns both messages and conversation context
  */
 export async function getConversationMessages(
   conversationId: string,
   limit: number = 100,
-): Promise<ModelMessage[]> {
+): Promise<{ messages: ModelMessage[]; context: ConversationContext }> {
   const conversation = await prisma.conversation.findUnique({
     where: { conversationId },
     include: {
@@ -104,14 +111,17 @@ export async function getConversationMessages(
   });
 
   if (!conversation) {
-    return [];
+    return { 
+      messages: [], 
+      context: { isGroup: false } 
+    };
   }
 
   // Reverse to get chronological order (oldest first)
   const messages = conversation.messages.reverse();
 
   // Convert to AI SDK format with preprocessing
-  return messages
+  const formattedMessages = messages
     .map((msg) => {
       // Build content based on attachments
       let content: string | Array<{ type: string; text?: string; image?: string }>;
@@ -158,6 +168,14 @@ export async function getConversationMessages(
       // For array content, ensure at least one part exists
       return msg.content.length > 0;
     });
+
+  return {
+    messages: formattedMessages,
+    context: {
+      isGroup: conversation.isGroup,
+      summary: conversation.summary ?? undefined,
+    },
+  };
 }
 
 /**

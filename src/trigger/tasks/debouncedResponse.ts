@@ -74,8 +74,8 @@ export const debouncedResponse = task({
       `Responding to conversation ${payload.conversationId} after debounce`,
     );
 
-    // Get conversation history (last 100 messages)
-    const messages = await getConversationMessages(payload.conversationId, 100);
+    // Get conversation history and context (last 100 messages)
+    const { messages, context } = await getConversationMessages(payload.conversationId, 100);
 
     if (messages.length === 0) {
       console.log(
@@ -87,9 +87,30 @@ export const debouncedResponse = task({
       };
     }
 
+    // Log conversation type and context
+    console.log(
+      `Conversation ${payload.conversationId} is a ${context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"}`,
+    );
+    if (context.summary) {
+      console.log(`Conversation has summary: ${context.summary}`);
+    }
+
     // Generate AI response with full conversation context
     try {
-      const actions = await respondToMessage(messages);
+      const actions = await respondToMessage(messages, context);
+
+      // If no actions, we're done (e.g., group chat where no response is needed)
+      if (actions.length === 0) {
+        console.log(
+          `No actions to execute for conversation ${payload.conversationId} (likely group chat silence)`,
+        );
+        await releaseResponseLock(payload.conversationId, taskId);
+        return {
+          success: true,
+          actionsExecuted: 0,
+          noResponseNeeded: true,
+        };
+      }
 
       // Execute the actions via the existing handleMessageResponse
       await handleMessageResponse.triggerAndWait({
