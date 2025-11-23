@@ -40,13 +40,14 @@ async function inboundMessageHandler(
   const conversationId = webhook.group?.group_id || webhook.recipient || "";
   const isGroup = !!webhook.group;
 
-  // Save the message to the database
+  // Save the message to the database with attachments
   await saveUserMessage(
     conversationId,
     webhook.text || "",
     webhook.recipient || "",
     webhook.message_id,
     isGroup,
+    webhook.attachments || [],
   );
 
   // Trigger debounced response task

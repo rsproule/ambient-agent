@@ -42,6 +42,7 @@ export async function saveUserMessage(
   sender: string,
   messageId?: string,
   isGroup: boolean = false,
+  attachments: string[] = [],
 ) {
   const conversation = await getOrCreateConversation(conversationId, isGroup);
 
@@ -52,6 +53,7 @@ export async function saveUserMessage(
       content,
       sender,
       messageId,
+      attachments,
     },
   });
 
@@ -108,22 +110,54 @@ export async function getConversationMessages(
   // Reverse to get chronological order (oldest first)
   const messages = conversation.messages.reverse();
 
-  // Convert to AI SDK format
-  return messages.map((msg) => {
-    // Add sender name for group messages (helps AI distinguish speakers)
-    if (msg.sender && conversation.isGroup && msg.role === "user") {
-      return {
-        role: "user" as const,
-        content: msg.content,
-        name: msg.sender,
-      };
-    }
+  // Convert to AI SDK format with preprocessing
+  return messages
+    .map((msg) => {
+      // Build content based on attachments
+      let content: string | Array<{ type: string; text?: string; image?: string }>;
+      
+      if (msg.attachments && msg.attachments.length > 0) {
+        // Format with attachments as multi-part content
+        const parts: Array<{ type: string; text?: string; image?: string }> = [];
+        
+        // Add text part if non-empty
+        if (msg.content && msg.content.trim()) {
+          parts.push({ type: "text", text: msg.content });
+        }
+        
+        // Add image parts
+        for (const attachment of msg.attachments) {
+          parts.push({ type: "image", image: attachment });
+        }
+        
+        content = parts;
+      } else {
+        // Simple text content
+        content = msg.content;
+      }
 
-    return {
-      role: msg.role as "user" | "assistant",
-      content: msg.content,
-    };
-  });
+      // Add sender name for group messages (helps AI distinguish speakers)
+      if (msg.sender && conversation.isGroup && msg.role === "user") {
+        return {
+          role: "user" as const,
+          content,
+          name: msg.sender,
+        };
+      }
+
+      return {
+        role: msg.role as "user" | "assistant",
+        content,
+      };
+    })
+    .filter((msg) => {
+      // Filter out messages with empty content
+      if (typeof msg.content === "string") {
+        return msg.content.trim().length > 0;
+      }
+      // For array content, ensure at least one part exists
+      return msg.content.length > 0;
+    });
 }
 
 /**

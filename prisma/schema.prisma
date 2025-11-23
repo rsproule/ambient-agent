@@ -34,6 +34,7 @@ model Message {
   content        String       @db.Text
   sender         String? // phone number for user messages
   messageId      String? // LoopMessage message_id
+  attachments    String[] // Array of attachment URLs
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
