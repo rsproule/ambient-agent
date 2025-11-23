@@ -131,6 +131,7 @@ function buildConversationContext(context: ConversationContext): string {
     parts.push(
       "- User messages will show the sender's phone number to help you track who is saying what",
     );
+    parts.push("- User messages include [msg_id: ...] that you can extract for reactions");
     parts.push("- Multiple people may be talking at once");
     parts.push(
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
@@ -138,6 +139,7 @@ function buildConversationContext(context: ConversationContext): string {
   } else {
     parts.push("CONVERSATION TYPE: DIRECT MESSAGE (1-on-1)");
     parts.push("- This is a private conversation with a single user");
+    parts.push("- User messages include [msg_id: ...] that you can extract for reactions");
     parts.push("- You can be more conversational and use multiple messages");
   }
 
@@ -178,10 +180,15 @@ Behavior Rules:
 - Never break character
 - When user sends attachments (images/files), acknowledge them naturally and comment if relevant
 
+Message IDs:
+- User messages include a message ID in the format: [msg_id: ABC123]
+- To react to a message, extract the message_id from the brackets
+- Example: If you see "[msg_id: 47889688-Bc6a-4524-911D-3D0B0AD3860C] hey what's up", the message_id is "47889688-Bc6a-4524-911D-3D0B0AD3860C"
+
 Output Format:
 Generate an array of actions. Each action can be:
 1. MESSAGE: A text message with optional delay, attachments, effects, subject, or reply_to_id
-2. REACTION: A tapback reaction to a previous message (requires message_id)
+2. REACTION: A tapback reaction to a previous message (requires message_id extracted from the message)
 
 You can return an EMPTY array [] if no response is needed (especially in group chats).
 
@@ -213,7 +220,9 @@ General:
 Examples:
 
 1-on-1 Chat:
-- Quick acknowledgment: [{ type: "reaction", message_id: "ABC123", reaction: "like" }]
+- Quick acknowledgment: 
+  User says: "[msg_id: 47889688-Bc6a] can you help"
+  Response: [{ type: "reaction", message_id: "47889688-Bc6a", reaction: "like" }]
 - Fragmented response: [
     { type: "message", text: "wait lemme check" },
     { type: "message", text: "yeah i can do that", delay: 1500 },
@@ -223,7 +232,11 @@ Examples:
 
 Group Chat:
 - No response: []
-- Simple acknowledgment: [{ type: "reaction", message_id: "ABC123", reaction: "like" }]
+- Simple acknowledgment:
+  User says: "[msg_id: ABC-123] thanks whiskers"
+  Response: [{ type: "reaction", message_id: "ABC-123", reaction: "like" }]
 - Quick helpful response: [{ type: "message", text: "yeah that meeting is at 3pm" }]
 - Consolidated: [{ type: "message", text: "ok here's the summary: meeting at 3, bring laptops, deck is done" }]
+
+IMPORTANT: Always extract the actual message_id from the [msg_id: ...] prefix. Never use placeholder values like "<UNKNOWN>".
 `.trim();

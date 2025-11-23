@@ -78,6 +78,7 @@ export async function saveUserMessage(
 export async function saveAssistantMessage(
   conversationId: string,
   content: string,
+  messageId?: string,
 ) {
   const conversation = await getOrCreateConversation(conversationId);
 
@@ -86,10 +87,25 @@ export async function saveAssistantMessage(
       conversationId: conversation.id,
       role: "assistant",
       content,
+      messageId,
+      attachments: [], // Assistant messages can have attachments too
     },
   });
 
   return message;
+}
+
+/**
+ * Update a message's messageId (for when we get the webhook confirmation)
+ */
+export async function updateMessageId(
+  internalMessageId: string,
+  loopMessageId: string,
+) {
+  await prisma.message.update({
+    where: { id: internalMessageId },
+    data: { messageId: loopMessageId },
+  });
 }
 
 /**
@@ -111,63 +127,18 @@ export async function getConversationMessages(
   });
 
   if (!conversation) {
-    return { 
-      messages: [], 
-      context: { isGroup: false } 
+    return {
+      messages: [],
+      context: { isGroup: false },
     };
   }
 
   // Reverse to get chronological order (oldest first)
   const messages = conversation.messages.reverse();
-
   // Convert to AI SDK format with preprocessing
   const formattedMessages = messages
-    .map((msg) => {
-      // Build content based on attachments
-      let content: string | Array<{ type: string; text?: string; image?: string }>;
-      
-      if (msg.attachments && msg.attachments.length > 0) {
-        // Format with attachments as multi-part content
-        const parts: Array<{ type: string; text?: string; image?: string }> = [];
-        
-        // Add text part if non-empty
-        if (msg.content && msg.content.trim()) {
-          parts.push({ type: "text", text: msg.content });
-        }
-        
-        // Add image parts
-        for (const attachment of msg.attachments) {
-          parts.push({ type: "image", image: attachment });
-        }
-        
-        content = parts;
-      } else {
-        // Simple text content
-        content = msg.content;
-      }
-
-      // Add sender name for group messages (helps AI distinguish speakers)
-      if (msg.sender && conversation.isGroup && msg.role === "user") {
-        return {
-          role: "user" as const,
-          content,
-          name: msg.sender,
-        };
-      }
-
-      return {
-        role: msg.role as "user" | "assistant",
-        content,
-      };
-    })
-    .filter((msg) => {
-      // Filter out messages with empty content
-      if (typeof msg.content === "string") {
-        return msg.content.trim().length > 0;
-      }
-      // For array content, ensure at least one part exists
-      return msg.content.length > 0;
-    });
+    .map((msg) => formatMessageForAI(msg, conversation.isGroup))
+    .filter((msg) => !isEmptyMessage(msg));
 
   return {
     messages: formattedMessages,
@@ -176,6 +147,82 @@ export async function getConversationMessages(
       summary: conversation.summary ?? undefined,
     },
   };
+}
+
+/**
+ * Format a single message for AI consumption
+ */
+function formatMessageForAI(
+  msg: {
+    role: string;
+    content: string;
+    messageId: string | null;
+    sender: string | null;
+    attachments: string[];
+  },
+  isGroup: boolean,
+): ModelMessage {
+  const content = buildMessageContent(msg);
+
+  // Group chat user messages include sender name
+  if (msg.role === "user" && isGroup && msg.sender) {
+    return { role: "user", content, name: msg.sender } as ModelMessage;
+  }
+
+  if (msg.role === "user") {
+    return { role: "user", content } as ModelMessage;
+  }
+
+  return { role: "assistant", content } as ModelMessage;
+}
+
+/**
+ * Build message content with attachments and message ID
+ */
+function buildMessageContent(msg: {
+  content: string;
+  messageId: string | null;
+  attachments: string[];
+}):
+  | string
+  | Array<{ type: "text"; text: string } | { type: "image"; image: string }> {
+  const hasAttachments = msg.attachments && msg.attachments.length > 0;
+
+  // Simple text-only message
+  if (!hasAttachments) {
+    return msg.messageId
+      ? `[msg_id: ${msg.messageId}] ${msg.content}`
+      : msg.content;
+  }
+
+  // Multi-part message with attachments
+  const parts: Array<
+    { type: "text"; text: string } | { type: "image"; image: string }
+  > = [];
+
+  if (msg.messageId) {
+    parts.push({ type: "text", text: `[msg_id: ${msg.messageId}]` });
+  }
+
+  if (msg.content?.trim()) {
+    parts.push({ type: "text", text: msg.content });
+  }
+
+  for (const url of msg.attachments) {
+    parts.push({ type: "image", image: url });
+  }
+
+  return parts;
+}
+
+/**
+ * Check if a message is empty and should be filtered out
+ */
+function isEmptyMessage(msg: ModelMessage): boolean {
+  if (typeof msg.content === "string") {
+    return msg.content.trim().length === 0;
+  }
+  return msg.content.length === 0;
 }
 
 /**
@@ -281,4 +328,3 @@ export async function shouldInterrupt(
     conversation.interruptRequested
   );
 }
-
