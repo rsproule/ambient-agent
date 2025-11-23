@@ -100,7 +100,7 @@ async function executeAction(
           ...baseParams,
           text: action.text,
           reply_to_id: action.reply_to_id,
-          attachments: action.attachments,
+          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
           effect: action.effect,
           subject: action.subject,
         });
@@ -109,14 +109,14 @@ async function executeAction(
           ...baseParams,
           text: action.text,
           effect: action.effect,
-          attachments: action.attachments,
+          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
           subject: action.subject,
         });
       } else {
         await client.sendLoopMessage({
           ...baseParams,
           text: action.text,
-          attachments: action.attachments,
+          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
           subject: action.subject,
         });
       }
