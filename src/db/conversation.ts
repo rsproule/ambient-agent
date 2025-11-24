@@ -12,6 +12,8 @@ export interface ConversationMessage {
 
 export interface ConversationContext {
   isGroup: boolean;
+  groupName?: string;
+  participants: string[];
   summary?: string; // Optional: compressed context summary for future use
   // Future: can add more context fields here (preferences, history, etc.)
 }
@@ -22,6 +24,8 @@ export interface ConversationContext {
 export async function getOrCreateConversation(
   conversationId: string,
   isGroup: boolean = false,
+  groupName?: string,
+  participants: string[] = [],
 ) {
   let conversation = await prisma.conversation.findUnique({
     where: { conversationId },
@@ -32,6 +36,17 @@ export async function getOrCreateConversation(
       data: {
         conversationId,
         isGroup,
+        groupName,
+        participants,
+      },
+    });
+  } else if (isGroup && participants.length > 0) {
+    // Update participants if this is a group and we have new participant data
+    conversation = await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        groupName,
+        participants,
       },
     });
   }
@@ -49,8 +64,15 @@ export async function saveUserMessage(
   messageId?: string,
   isGroup: boolean = false,
   attachments: string[] = [],
+  groupName?: string,
+  participants: string[] = [],
 ) {
-  const conversation = await getOrCreateConversation(conversationId, isGroup);
+  const conversation = await getOrCreateConversation(
+    conversationId,
+    isGroup,
+    groupName,
+    participants,
+  );
 
   const message = await prisma.message.create({
     data: {
@@ -129,7 +151,10 @@ export async function getConversationMessages(
   if (!conversation) {
     return {
       messages: [],
-      context: { isGroup: false },
+      context: {
+        isGroup: false,
+        participants: [],
+      },
     };
   }
 
@@ -144,6 +169,8 @@ export async function getConversationMessages(
     messages: formattedMessages,
     context: {
       isGroup: conversation.isGroup,
+      groupName: conversation.groupName ?? undefined,
+      participants: conversation.participants,
       summary: conversation.summary ?? undefined,
     },
   };

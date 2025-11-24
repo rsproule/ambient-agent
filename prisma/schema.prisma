@@ -15,6 +15,8 @@ model Conversation {
   id                   String    @id @default(cuid())
   conversationId       String    @unique // phone number or group_id
   isGroup              Boolean   @default(false)
+  groupName            String? // Optional: Group name
+  participants         String[] // Array of phone numbers/emails for group participants
   summary              String?   @db.Text // Optional: compressed context summary for future use
   lastMessageAt        DateTime  @updatedAt
   createdAt            DateTime  @default(now())
@@ -38,4 +40,37 @@ model Message {
   createdAt      DateTime     @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  phoneNumber String?  @unique // Optional: Phone number for DMs (1-1 mapping). Null for web-only users (merchants)
+  name        String? // Optional display name
+  email       String? // Optional email
+  metadata    Json? // Optional additional user metadata
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([phoneNumber])
+}
+
+enum MessageStatus {
+  pending
+  processing
+  completed
+  failed
+}
+
+model QueuedMessage {
+  id           String        @id @default(cuid())
+  target       Json // Discriminated union: { type: 'user_id', userId: string } | { type: 'global' } | { type: 'segment', segmentId: string }
+  source       String // Identifier for the user/merchant sending the message
+  bribePayload Json? // Optional payment metadata
+  payload      Json // Generic message payload
+  status       MessageStatus @default(pending)
+  processedAt  DateTime?
+  error        String?       @db.Text
+  createdAt    DateTime      @default(now())
+
+  @@index([status, createdAt])
 }
