@@ -1,4 +1,5 @@
 import { enqueueMessage } from "@/src/db/messageQueue";
+import { getUserById } from "@/src/db/user";
 import type { CreateQueuedMessageInput } from "@/src/lib/message-queue/types";
 import { NextResponse } from "next/server";
 
@@ -50,14 +51,28 @@ export async function POST(request: Request) {
     }
 
     // Validate user_id target has userId
-    if (body.target.type === "user_id" && !body.target.userId) {
-      return NextResponse.json(
-        {
-          error: "Invalid user_id target",
-          details: "user_id target must have a 'userId' field",
-        },
-        { status: 400 },
-      );
+    if (body.target.type === "user_id") {
+      if (!body.target.userId) {
+        return NextResponse.json(
+          {
+            error: "Invalid user_id target",
+            details: "user_id target must have a 'userId' field",
+          },
+          { status: 400 },
+        );
+      }
+
+      // Validate user exists in database
+      const user = await getUserById(body.target.userId);
+      if (!user) {
+        return NextResponse.json(
+          {
+            error: "User not found",
+            details: `No user found with ID: ${body.target.userId}`,
+          },
+          { status: 404 },
+        );
+      }
     }
 
     // Validate segment target has segmentId

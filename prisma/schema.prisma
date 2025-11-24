@@ -62,15 +62,44 @@ enum MessageStatus {
 }
 
 model QueuedMessage {
-  id           String        @id @default(cuid())
+  id           String              @id @default(cuid())
   target       Json // Discriminated union: { type: 'user_id', userId: string } | { type: 'global' } | { type: 'segment', segmentId: string }
   source       String // Identifier for the user/merchant sending the message
   bribePayload Json? // Optional payment metadata
   payload      Json // Generic message payload
-  status       MessageStatus @default(pending)
+  status       MessageStatus       @default(pending)
   processedAt  DateTime?
-  error        String?       @db.Text
-  createdAt    DateTime      @default(now())
+  error        String?             @db.Text
+  createdAt    DateTime            @default(now())
+  evaluations  MessageEvaluation[]
 
   @@index([status, createdAt])
+}
+
+model PrioritizationConfig {
+  id                 String   @id @default(cuid())
+  conversationId     String   @unique // Links to Conversation.conversationId (phone number or group_id)
+  minimumNotifyPrice Decimal  @default(0) @db.Decimal(10, 2) // Dollar threshold for delivery
+  customValuePrompt  String?  @db.Text // Optional: User's custom AI prompt for value calculation
+  isEnabled          Boolean  @default(true) // Allow disabling prioritization
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([conversationId])
+}
+
+model MessageEvaluation {
+  id               String        @id @default(cuid())
+  queuedMessageId  String // Link to QueuedMessage
+  queuedMessage    QueuedMessage @relation(fields: [queuedMessageId], references: [id], onDelete: Cascade)
+  conversationId   String // Which conversation this was evaluated for
+  baseValue        Decimal       @db.Decimal(10, 2) // AI-calculated value
+  bribeAmount      Decimal       @default(0) @db.Decimal(10, 2) // From bribePayload
+  totalValue       Decimal       @db.Decimal(10, 2) // baseValue + bribeAmount
+  passed           Boolean // Whether it passed the threshold
+  evaluationReason String        @db.Text // AI's explanation
+  evaluatedAt      DateTime      @default(now())
+
+  @@index([queuedMessageId])
+  @@index([conversationId, evaluatedAt])
 }

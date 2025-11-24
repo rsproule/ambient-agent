@@ -11,6 +11,7 @@ export interface ConversationMessage {
 }
 
 export interface ConversationContext {
+  conversationId: string; // Phone number or group_id
   isGroup: boolean;
   groupName?: string;
   participants: string[];
@@ -118,6 +119,35 @@ export async function saveAssistantMessage(
 }
 
 /**
+ * Save a system message to the database (merchant/service messages to be delivered)
+ */
+export async function saveSystemMessage(
+  conversationId: string,
+  content: string,
+  source: string,
+) {
+  const conversation = await getOrCreateConversation(conversationId);
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      role: "system",
+      content,
+      sender: source, // Track the merchant/service source
+      attachments: [],
+    },
+  });
+
+  // Update conversation's lastMessageAt
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: { lastMessageAt: new Date() },
+  });
+
+  return message;
+}
+
+/**
  * Update a message's messageId (for when we get the webhook confirmation)
  */
 export async function updateMessageId(
@@ -152,6 +182,7 @@ export async function getConversationMessages(
     return {
       messages: [],
       context: {
+        conversationId,
         isGroup: false,
         participants: [],
       },
@@ -168,6 +199,7 @@ export async function getConversationMessages(
   return {
     messages: formattedMessages,
     context: {
+      conversationId,
       isGroup: conversation.isGroup,
       groupName: conversation.groupName ?? undefined,
       participants: conversation.participants,
@@ -190,6 +222,14 @@ function formatMessageForAI(
   isGroup: boolean,
 ): ModelMessage {
   const content = buildMessageContent(msg);
+
+  // System messages (merchant/service messages to be delivered)
+  if (msg.role === "system") {
+    return {
+      role: "user",
+      content: `[SYSTEM: Deliver this message from ${msg.sender}]\n${content}`,
+    } as ModelMessage;
+  }
 
   // Group chat user messages include sender name
   if (msg.role === "user" && isGroup && msg.sender) {

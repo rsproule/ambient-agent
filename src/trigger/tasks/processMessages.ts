@@ -4,13 +4,10 @@ import {
   markMessageFailed,
   markMessageProcessing,
 } from "@/src/db/messageQueue";
-import { getPhoneNumberForUser } from "@/src/db/user";
-import {
-  isGlobalTarget,
-  isSegmentTarget,
-  isUserTarget,
-  type QueuedMessage,
-} from "@/src/lib/message-queue/types";
+import type { QueuedMessage } from "@/src/lib/message-queue/types";
+import { deliverMessage } from "@/src/services/delivery";
+import { evaluateMessage } from "@/src/services/prioritization";
+import { resolveRecipients } from "@/src/services/recipients";
 import { task } from "@trigger.dev/sdk/v3";
 
 type ProcessMessagesPayload = {
@@ -20,13 +17,14 @@ type ProcessMessagesPayload = {
 /**
  * Message Processor Task
  *
- * This is boilerplate scaffolding for processing queued messages.
- * The actual processing logic should be implemented based on your business needs.
- *
- * This task:
+ * Implements the full prioritization and delivery flow:
  * 1. Fetches pending messages from the queue
- * 2. Processes each message based on its target type
- * 3. Updates message status appropriately
+ * 2. Resolves recipients based on target type
+ * 3. For each recipient:
+ *    - Evaluates message value using AI + bribe amount
+ *    - If passes threshold, delivers via Mr. Whiskers
+ *    - Stores evaluation record
+ * 4. Updates message status
  */
 export const processMessages = task({
   id: "process-messages",
@@ -51,6 +49,10 @@ export const processMessages = task({
       success: 0,
       failed: 0,
       errors: [] as Array<{ messageId: string; error: string }>,
+      totalRecipients: 0,
+      totalEvaluations: 0,
+      totalPassed: 0,
+      totalDelivered: 0,
     };
 
     // Process each message
@@ -59,15 +61,22 @@ export const processMessages = task({
         // Mark as processing
         await markMessageProcessing(message.id);
 
-        // Process based on target type
-        await processMessage(message);
+        // Process the message through the full flow
+        const messageResults = await processMessage(message);
+
+        // Update aggregate results
+        results.totalRecipients += messageResults.recipients;
+        results.totalEvaluations += messageResults.evaluations;
+        results.totalPassed += messageResults.passed;
+        results.totalDelivered += messageResults.delivered;
 
         // Mark as completed
         await markMessageCompleted(message.id);
         results.success++;
 
         console.log(
-          `Successfully processed message ${message.id} from source: ${message.source}`,
+          `Successfully processed message ${message.id}: ` +
+            `${messageResults.delivered}/${messageResults.recipients} delivered`,
         );
       } catch (error) {
         const errorMessage =
@@ -90,152 +99,124 @@ export const processMessages = task({
       processed: results.success,
       failed: results.failed,
       errors: results.errors,
+      stats: {
+        totalRecipients: results.totalRecipients,
+        totalEvaluations: results.totalEvaluations,
+        totalPassed: results.totalPassed,
+        totalDelivered: results.totalDelivered,
+      },
     };
   },
 });
 
+interface MessageProcessingResult {
+  recipients: number;
+  evaluations: number;
+  passed: number;
+  delivered: number;
+}
+
 /**
- * Process a single message based on its target type
- *
- * TODO: Implement actual processing logic for each target type
- * This is currently a placeholder that logs the message details.
+ * Process a single message through the full prioritization and delivery flow
  */
-async function processMessage(message: QueuedMessage): Promise<void> {
-  console.log(`Processing message ${message.id}`, {
+async function processMessage(
+  message: QueuedMessage,
+): Promise<MessageProcessingResult> {
+  console.log(`[Process] Starting message ${message.id}`, {
     source: message.source,
     targetType: message.target.type,
     hasBribe: !!message.bribePayload,
   });
 
-  // Process based on target type
-  if (isUserTarget(message.target)) {
-    await processUserMessage(message);
-  } else if (isGlobalTarget(message.target)) {
-    await processGlobalMessage(message);
-  } else if (isSegmentTarget(message.target)) {
-    await processSegmentMessage(message);
-  } else {
-    throw new Error(`Unknown target type: ${JSON.stringify(message.target)}`);
-  }
-}
+  // Step 1: Resolve recipients based on target type
+  const recipients = await resolveRecipients(message.target);
 
-/**
- * Process a message targeted at a specific user
- *
- * This function:
- * 1. Looks up the user's phone number from the User table
- * 2. Sends a DM to that phone number
- * 3. Handles any bribe/payment logic
- *
- * TODO: Implement actual message sending logic
- */
-async function processUserMessage(message: QueuedMessage): Promise<void> {
-  if (!isUserTarget(message.target)) {
-    throw new Error("Invalid target type for processUserMessage");
-  }
+  console.log(
+    `[Process] Resolved ${recipients.length} recipients for message ${message.id}`,
+  );
 
-  const userId = message.target.userId;
-
-  // Look up the user's phone number
-  const phoneNumber = await getPhoneNumberForUser(userId);
-
-  if (!phoneNumber) {
-    throw new Error(
-      `User ${userId} does not have a phone number. Cannot send DM.`,
+  if (recipients.length === 0) {
+    console.warn(
+      `[Process] No recipients found for message ${
+        message.id
+      }. Target: ${JSON.stringify(message.target)}`,
     );
+    return {
+      recipients: 0,
+      evaluations: 0,
+      passed: 0,
+      delivered: 0,
+    };
+  }
+
+  const results: MessageProcessingResult = {
+    recipients: recipients.length,
+    evaluations: 0,
+    passed: 0,
+    delivered: 0,
+  };
+
+  // Step 2: Evaluate and deliver to each recipient
+  for (const recipient of recipients) {
+    try {
+      console.log(
+        `[Process] Evaluating message ${message.id} for recipient ${recipient.userId} (${recipient.conversationId})`,
+      );
+
+      // Evaluate the message for this specific recipient/conversation
+      const evaluation = await evaluateMessage(
+        message,
+        recipient.conversationId,
+      );
+
+      results.evaluations++;
+
+      if (evaluation.passed) {
+        results.passed++;
+
+        console.log(
+          `[Process] Message ${message.id} passed for ${recipient.conversationId} ` +
+            `(value: $${evaluation.totalValue}, threshold: $${evaluation.threshold})`,
+        );
+
+        // Deliver the message
+        const deliveryResult = await deliverMessage(
+          message,
+          recipient.conversationId,
+          evaluation,
+        );
+
+        if (deliveryResult.success) {
+          results.delivered++;
+          console.log(
+            `[Process] Successfully delivered message ${message.id} to ${recipient.conversationId}`,
+          );
+        } else {
+          console.error(
+            `[Process] Failed to deliver message ${message.id} to ${recipient.conversationId}: ${deliveryResult.error}`,
+          );
+        }
+      } else {
+        console.log(
+          `[Process] Message ${message.id} did not pass for ${recipient.conversationId} ` +
+            `(value: $${evaluation.totalValue}, threshold: $${evaluation.threshold})`,
+        );
+      }
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error(
+        `[Process] Error processing recipient ${recipient.userId}: ${errorMessage}`,
+      );
+      // Continue to next recipient on error
+    }
   }
 
   console.log(
-    `[USER MESSAGE] Processing for user ${userId} (phone: ${phoneNumber})`,
-    {
-      messageId: message.id,
-      source: message.source,
-      payload: message.payload,
-      bribePayload: message.bribePayload,
-    },
+    `[Process] Completed message ${message.id}: ` +
+      `${results.delivered}/${results.recipients} delivered, ` +
+      `${results.passed}/${results.evaluations} passed evaluation`,
   );
 
-  // TODO: Implement actual message sending
-  // Here you would typically:
-  // 1. Use LoopMessage SDK or similar to send DM to phoneNumber
-  // 2. Handle any bribe/payment logic for prioritization
-  // 3. Log the delivery
-  // 4. Update any user preferences or history
-  //
-  // Example:
-  // await client.sendLoopMessage({
-  //   recipient: phoneNumber,
-  //   text: message.payload.message,
-  // });
-
-  console.log(`✓ Would send DM to user ${userId} at phone ${phoneNumber}`);
-}
-
-/**
- * Process a global broadcast message
- *
- * TODO: Implement global message processing
- * This might involve:
- * - Broadcasting to all active users
- * - Publishing to a global event stream
- * - Triggering system-wide notifications
- * - etc.
- */
-async function processGlobalMessage(message: QueuedMessage): Promise<void> {
-  if (!isGlobalTarget(message.target)) {
-    throw new Error("Invalid target type for processGlobalMessage");
-  }
-
-  // TODO: Implement actual global message processing
-  console.log(`[GLOBAL MESSAGE] Processing global broadcast`, {
-    messageId: message.id,
-    source: message.source,
-    payload: message.payload,
-    bribePayload: message.bribePayload,
-  });
-
-  // Placeholder: Here you would typically:
-  // 1. Get list of all active users or subscribers
-  // 2. Broadcast the message to all recipients
-  // 3. Handle any prioritization based on bribe/payment
-  // 4. Track delivery metrics
-
-  // For now, just log the action
-  console.log(`✓ Would broadcast message globally`);
-}
-
-/**
- * Process a message targeted at a specific segment
- *
- * TODO: Implement segment-specific message processing
- * This might involve:
- * - Looking up users in the segment
- * - Sending to all users in that segment
- * - Handling segment-specific logic or preferences
- * - etc.
- */
-async function processSegmentMessage(message: QueuedMessage): Promise<void> {
-  if (!isSegmentTarget(message.target)) {
-    throw new Error("Invalid target type for processSegmentMessage");
-  }
-
-  const segmentId = message.target.segmentId;
-
-  // TODO: Implement actual segment message processing
-  console.log(`[SEGMENT MESSAGE] Processing for segment ${segmentId}`, {
-    messageId: message.id,
-    source: message.source,
-    payload: message.payload,
-    bribePayload: message.bribePayload,
-  });
-
-  // Placeholder: Here you would typically:
-  // 1. Look up the segment definition by segmentId
-  // 2. Query all users matching the segment criteria
-  // 3. Send the message to each user in the segment
-  // 4. Handle any prioritization or rate limiting
-  // 5. Track segment delivery metrics
-
-  // For now, just log the action
-  console.log(`✓ Would send message to segment ${segmentId}`);
+  return results;
 }

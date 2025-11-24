@@ -1,16 +1,18 @@
 import type { ConversationContext } from "@/src/db/conversation";
 import type { LanguageModel } from "ai";
 import type { z } from "zod";
+import type { AgentPersonality } from "./personalities";
 
 /**
- * An agent is a composable personality/behavior configuration
- * that can be used to generate responses with iMessage actions.
+ * An agent is a complete configuration for generating iMessage responses.
  *
- * Agents encapsulate:
- * - Personality and behavior (baseInstructions)
- * - Context building logic (buildContext)
- * - Model configuration (model)
- * - Output schema (schema)
+ * Agents compose together:
+ * - Personality (voice, style, character)
+ * - System prompt (technical iMessage interaction rules)
+ * - Context building logic
+ * - Model configuration
+ * - Output schema
+ * - Optional tools for extended functionality
  */
 export interface Agent<TSchema extends z.ZodType = z.ZodType> {
   /**
@@ -24,8 +26,13 @@ export interface Agent<TSchema extends z.ZodType = z.ZodType> {
   name: string;
 
   /**
-   * Base system instructions that define the agent's personality,
-   * behavior rules, and response guidelines
+   * The personality configuration (voice, style, character)
+   */
+  personality: AgentPersonality;
+
+  /**
+   * Full system instructions (personality + technical prompts)
+   * This is typically built by composing personality.prompt with system prompts
    */
   baseInstructions: string;
 
@@ -44,4 +51,11 @@ export interface Agent<TSchema extends z.ZodType = z.ZodType> {
    * The output schema that defines the structure of responses
    */
   schema: TSchema;
+
+  /**
+   * Optional tools that the agent can use
+   * Tools allow agents to perform actions like updating configs, querying data, etc.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  tools?: Record<string, any>;
 }
