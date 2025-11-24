@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from "next/server";
 import {
+  deletePrioritizationConfig,
   getPrioritizationConfig,
   upsertPrioritizationConfig,
-  deletePrioritizationConfig,
 } from "@/src/db/prioritization";
 import { DEFAULT_CONFIG } from "@/src/services/prioritization";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 /**
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Validation error",
-          details: validation.error.errors,
+          details: validation.error.flatten().fieldErrors,
         },
         { status: 400 },
       );
@@ -103,10 +103,7 @@ export async function POST(request: NextRequest) {
     const { conversationId, ...configData } = validation.data;
 
     // Upsert the config
-    const config = await upsertPrioritizationConfig(
-      conversationId,
-      configData,
-    );
+    const config = await upsertPrioritizationConfig(conversationId, configData);
 
     return NextResponse.json({
       success: true,
@@ -158,4 +155,3 @@ export async function DELETE(request: NextRequest) {
     );
   }
 }
-

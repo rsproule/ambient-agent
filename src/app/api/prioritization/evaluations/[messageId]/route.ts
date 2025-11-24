@@ -1,19 +1,19 @@
-import { NextRequest, NextResponse } from "next/server";
 import { getEvaluationsForMessage } from "@/src/db/prioritization";
+import { NextRequest, NextResponse } from "next/server";
 
 /**
  * GET /api/prioritization/evaluations/[messageId]
  * Get all evaluations for a queued message
- * 
+ *
  * This is useful for multi-recipient messages (global/segment)
  * where one message has multiple evaluations across different conversations
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { messageId: string } },
+  { params }: { params: Promise<{ messageId: string }> },
 ) {
   try {
-    const messageId = params.messageId;
+    const { messageId } = await params;
 
     if (!messageId) {
       return NextResponse.json(
@@ -45,10 +45,7 @@ export async function GET(
       averageBaseValue:
         evaluations.reduce((sum, e) => sum + e.baseValue, 0) /
         evaluations.length,
-      totalBribeAmount: evaluations.reduce(
-        (sum, e) => sum + e.bribeAmount,
-        0,
-      ),
+      totalBribeAmount: evaluations.reduce((sum, e) => sum + e.bribeAmount, 0),
     };
 
     return NextResponse.json({
@@ -68,4 +65,3 @@ export async function GET(
     );
   }
 }
-
