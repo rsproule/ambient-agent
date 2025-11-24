@@ -51,10 +51,22 @@ export async function POST(request: NextRequest) {
 /**
  * GET /api/trigger-process-messages
  *
- * Check status - just trigger a small batch
+ * Cron endpoint - processes messages from the queue
+ * Protected by CRON_SECRET for Vercel cron jobs
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify the request is from Vercel Cron
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      console.warn("[API] Unauthorized cron request");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    console.log("[API] Cron triggered: processing messages");
+
     const handle = await tasks.trigger<typeof processMessages>(
       "process-messages",
       {
@@ -64,7 +76,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Message processing triggered",
+      message: "Message processing triggered by cron",
       taskId: handle.id,
     });
   } catch (error) {

@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/trigger-process-messages",
+      "schedule": "* * * * *"
+    }
+  ]
+}
+
