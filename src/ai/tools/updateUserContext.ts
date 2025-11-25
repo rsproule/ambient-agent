@@ -1,10 +1,10 @@
+import { updateUserContext as updateUserContextDb } from "@/src/db/user";
 import { tool } from "ai";
 import { z } from "zod";
-import { updateUserContext as updateUserContextDb } from "@/src/db/user";
 
 /**
  * Tool for updating user context and preferences
- * 
+ *
  * Allows the agent to store information about a user including:
  * - User preferences and settings
  * - Custom context the user has shared
@@ -25,15 +25,15 @@ export const updateUserContextTool = tool({
       .passthrough()
       .describe(
         "The context data to store as a JSON object. Can include any properties like " +
-        "preferences, notes, custom fields, etc. Examples: {name: 'John', timezone: 'America/New_York', " +
-        "preferences: {notificationStyle: 'minimal'}}"
+          "preferences, notes, custom fields, etc. Examples: {name: 'John', timezone: 'America/New_York', " +
+          "preferences: {notificationStyle: 'minimal'}}",
       ),
     replace: z
       .boolean()
       .optional()
       .default(false)
       .describe(
-        "If true, completely replaces existing context. If false (default), merges with existing context."
+        "If true, completely replaces existing context. If false (default), merges with existing context.",
       ),
   }),
   execute: async ({ phoneNumber, context, replace }) => {
@@ -42,16 +42,20 @@ export const updateUserContextTool = tool({
 
       return {
         success: true,
-        message: `User context ${replace ? "replaced" : "updated"} successfully for ${phoneNumber}. ` +
+        message:
+          `User context ${
+            replace ? "replaced" : "updated"
+          } successfully for ${phoneNumber}. ` +
           `Stored ${Object.keys(context).length} properties.`,
         updatedContext: user.metadata,
       };
     } catch (error) {
       return {
         success: false,
-        message: `Failed to update user context: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Failed to update user context: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       };
     }
   },
 });
-
