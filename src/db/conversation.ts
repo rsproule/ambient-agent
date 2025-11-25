@@ -125,6 +125,8 @@ export async function saveSystemMessage(
   conversationId: string,
   content: string,
   source: string,
+  forwarded?: boolean,
+  rejectionReason?: string,
 ) {
   const conversation = await getOrCreateConversation(conversationId);
 
@@ -135,6 +137,8 @@ export async function saveSystemMessage(
       content,
       sender: source, // Track the merchant/service source
       attachments: [],
+      forwarded,
+      rejectionReason,
     },
   });
 
@@ -145,6 +149,23 @@ export async function saveSystemMessage(
   });
 
   return message;
+}
+
+/**
+ * Update system message forwarding status
+ */
+export async function updateSystemMessageStatus(
+  messageId: string,
+  forwarded: boolean,
+  rejectionReason?: string,
+) {
+  await prisma.message.update({
+    where: { id: messageId },
+    data: {
+      forwarded,
+      rejectionReason,
+    },
+  });
 }
 
 /**

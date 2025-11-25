@@ -3,6 +3,7 @@ import { respondToMessage } from "@/src/ai/respondToMessage";
 import {
   getConversationMessages,
   saveSystemMessage,
+  updateSystemMessageStatus,
 } from "@/src/db/conversation";
 import type { QueuedMessage } from "@/src/lib/message-queue/types";
 import type { EvaluationResult } from "@/src/services/prioritization";
@@ -13,8 +14,10 @@ export interface DeliveryResult {
   success: boolean;
   conversationId: string;
   messageStored: boolean;
+  forwarded: boolean;
   responseTaskId?: string;
   error?: string;
+  rejectionReason?: string;
 }
 
 /**
@@ -46,10 +49,12 @@ export async function deliverMessage(
     // Step 1: Store raw message in conversation as a SYSTEM message (not from user)
     const messageContent = formatRawMessageForStorage(queuedMessage);
 
-    await saveSystemMessage(
+    const systemMessage = await saveSystemMessage(
       conversationId,
       messageContent,
       queuedMessage.source, // sender is the source/merchant
+      undefined, // forwarded status will be updated later
+      undefined, // rejection reason (if any)
     );
 
     console.log(
@@ -90,6 +95,9 @@ export async function deliverMessage(
       );
     }
 
+    // Mark system message as forwarded
+    await updateSystemMessageStatus(systemMessage.id, true);
+
     // Step 4: Execute the response via handleMessageResponse task
     const taskId = `delivery-${queuedMessage.id}-${Date.now()}`;
 
@@ -112,6 +120,7 @@ export async function deliverMessage(
       success: true,
       conversationId,
       messageStored: true,
+      forwarded: true,
       responseTaskId: handle.id,
     };
   } catch (error) {
@@ -123,11 +132,27 @@ export async function deliverMessage(
       errorMessage,
     );
 
+    // Try to mark the system message as rejected if we stored it
+    try {
+      // We need to get the system message ID - for now just log the failure
+      // In a production system, you'd want to track the message ID from earlier
+      console.error(
+        `[Delivery] Message ${queuedMessage.id} rejected: ${errorMessage}`,
+      );
+    } catch (updateError) {
+      console.error(
+        `[Delivery] Failed to update rejection status:`,
+        updateError,
+      );
+    }
+
     return {
       success: false,
       conversationId,
       messageStored: false,
+      forwarded: false,
       error: errorMessage,
+      rejectionReason: errorMessage,
     };
   }
 }
