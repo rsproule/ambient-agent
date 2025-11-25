@@ -1,6 +1,6 @@
 /**
  * Message Queue Type Definitions
- * 
+ *
  * Defines the structure for generic messages that can be queued
  * and processed by the message processing system.
  */
@@ -9,6 +9,11 @@
 export type UserTarget = {
   type: "user_id";
   userId: string;
+};
+
+export type PhoneTarget = {
+  type: "phone_number";
+  phoneNumber: string;
 };
 
 export type GlobalTarget = {
@@ -20,7 +25,11 @@ export type SegmentTarget = {
   segmentId: string;
 };
 
-export type MessageTarget = UserTarget | GlobalTarget | SegmentTarget;
+export type MessageTarget =
+  | UserTarget
+  | PhoneTarget
+  | GlobalTarget
+  | SegmentTarget;
 
 // Bribe/Payment payload (optional)
 export interface BribePayload {
@@ -68,11 +77,16 @@ export function isUserTarget(target: MessageTarget): target is UserTarget {
   return target.type === "user_id";
 }
 
+export function isPhoneTarget(target: MessageTarget): target is PhoneTarget {
+  return target.type === "phone_number";
+}
+
 export function isGlobalTarget(target: MessageTarget): target is GlobalTarget {
   return target.type === "global";
 }
 
-export function isSegmentTarget(target: MessageTarget): target is SegmentTarget {
+export function isSegmentTarget(
+  target: MessageTarget,
+): target is SegmentTarget {
   return target.type === "segment";
 }
-

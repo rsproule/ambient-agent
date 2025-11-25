@@ -1,5 +1,5 @@
 import { enqueueMessage } from "@/src/db/messageQueue";
-import { getUserById } from "@/src/db/user";
+import { getUserById, getUserByPhoneNumber } from "@/src/db/user";
 import type { CreateQueuedMessageInput } from "@/src/lib/message-queue/types";
 import { NextResponse } from "next/server";
 
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     // Validate target type
-    const validTargetTypes = ["user_id", "global", "segment"];
+    const validTargetTypes = ["user_id", "phone_number", "global", "segment"];
     if (!validTargetTypes.includes(body.target.type)) {
       return NextResponse.json(
         {
@@ -73,6 +73,37 @@ export async function POST(request: Request) {
           { status: 404 },
         );
       }
+    }
+
+    // Validate phone_number target and convert to user_id internally
+    if (body.target.type === "phone_number") {
+      if (!body.target.phoneNumber) {
+        return NextResponse.json(
+          {
+            error: "Invalid phone_number target",
+            details: "phone_number target must have a 'phoneNumber' field",
+          },
+          { status: 400 },
+        );
+      }
+
+      // Validate user exists in database by phone number
+      const user = await getUserByPhoneNumber(body.target.phoneNumber);
+      if (!user) {
+        return NextResponse.json(
+          {
+            error: "User not found",
+            details: `No user found with phone number: ${body.target.phoneNumber}`,
+          },
+          { status: 404 },
+        );
+      }
+
+      // Convert phone_number target to user_id target internally
+      body.target = {
+        type: "user_id",
+        userId: user.id,
+      };
     }
 
     // Validate segment target has segmentId
