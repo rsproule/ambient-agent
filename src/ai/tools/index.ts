@@ -10,4 +10,5 @@ export { getConversationConfigTool } from "./getConversationConfig";
 export { updateConversationConfigTool } from "./updateConversationConfig";
 export { getUserContextTool } from "./getUserContext";
 export { updateUserContextTool } from "./updateUserContext";
+export { createImageTool } from "./createImage";
 

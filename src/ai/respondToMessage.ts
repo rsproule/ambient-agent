@@ -66,14 +66,48 @@ export async function respondToMessage(
   try {
     // Generate response - the agent handles tool calling and structured output automatically
     // Use messages parameter (accepts ModelMessage[])
-    const { output } = await loopAgent.generate({
+    const result = await loopAgent.generate({
       messages,
     });
 
     const after = performance.now();
     console.log(`[${agent.name}] Time taken: ${Math.round(after - before)}ms`);
+    
+    // Log tool calls if any were made
+    if (result.steps && result.steps.length > 0) {
+      console.log(`[${agent.name}] Tool calls made: ${result.steps.length}`);
+      result.steps.forEach((step, idx) => {
+        if (step.type === 'tool-call') {
+          console.log(`[${agent.name}] Tool call ${idx + 1}:`, {
+            tool: step.toolName,
+            args: step.args,
+          });
+        }
+        if (step.type === 'tool-result') {
+          const result = step.result as { success?: boolean; message?: string };
+          
+          // Log errors prominently
+          if (result && typeof result === 'object' && result.success === false) {
+            console.error(`[${agent.name}] ❌ Tool FAILED ${idx + 1}:`, {
+              tool: step.toolName,
+              error: result.message || 'Unknown error',
+              fullResult: step.result,
+            });
+          } else {
+            console.log(`[${agent.name}] ✅ Tool result ${idx + 1}:`, {
+              tool: step.toolName,
+              result: step.result,
+            });
+          }
+        }
+      });
+    } else {
+      console.log(`[${agent.name}] No tool calls were made`);
+    }
+    
+    console.log(`[${agent.name}] Final actions:`, JSON.stringify((result.output as IMessageResponse).actions, null, 2));
 
-    return (output as IMessageResponse).actions;
+    return (result.output as IMessageResponse).actions;
   } catch (error) {
     const after = performance.now();
     console.error(

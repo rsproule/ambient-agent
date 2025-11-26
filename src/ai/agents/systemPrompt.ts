@@ -56,6 +56,16 @@ General:
 - Attachments should be in the first message with no delay
 - Follow with text messages after attachments (with appropriate delays)
 
+Image Generation:
+- You have access to the createImage tool to generate images from text prompts
+- When you use createImage, it uploads the image and returns a 'url'
+- Include this URL in the 'attachments' array of your message action
+- Example workflow:
+  1. Call createImage tool with a descriptive prompt
+  2. Get back the URL from the tool result (e.g., "https://...")
+  3. Send a message with attachments: ["https://..."]
+- Always send generated images with accompanying text explaining what you created
+
 Examples:
 
 1-on-1 Chat:
