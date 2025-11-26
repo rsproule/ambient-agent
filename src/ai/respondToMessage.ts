@@ -66,14 +66,67 @@ export async function respondToMessage(
   try {
     // Generate response - the agent handles tool calling and structured output automatically
     // Use messages parameter (accepts ModelMessage[])
-    const { output } = await loopAgent.generate({
+    const result = await loopAgent.generate({
       messages,
     });
 
     const after = performance.now();
     console.log(`[${agent.name}] Time taken: ${Math.round(after - before)}ms`);
 
-    return (output as IMessageResponse).actions;
+    // Log tool calls if any were made
+    if (result.steps && result.steps.length > 0) {
+      result.steps.forEach((step, stepIdx) => {
+        // Log tool calls from this step
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          step.toolCalls.forEach((toolCall) => {
+            console.log(`[${agent.name}] Tool call in step ${stepIdx + 1}:`, {
+              tool: toolCall.toolName,
+              input: toolCall.input,
+            });
+          });
+        }
+
+        // Log tool results from this step
+        if (step.toolResults && step.toolResults.length > 0) {
+          step.toolResults.forEach((toolResult) => {
+            const output = toolResult.output as
+              | { success?: boolean; message?: string }
+              | undefined;
+
+            // Log errors prominently
+            if (
+              output &&
+              typeof output === "object" &&
+              output.success === false
+            ) {
+              console.error(
+                `[${agent.name}] ❌ Tool FAILED in step ${stepIdx + 1}:`,
+                {
+                  tool: toolResult.toolName,
+                  error: output.message || "Unknown error",
+                  fullOutput: toolResult.output,
+                },
+              );
+            } else {
+              console.log(
+                `[${agent.name}] ✅ Tool result in step ${stepIdx + 1}:`,
+                {
+                  tool: toolResult.toolName,
+                  output: toolResult.output,
+                },
+              );
+            }
+          });
+        }
+      });
+    } else {
+      console.log(`[${agent.name}] No tool calls were made`);
+    }
+
+    const actions = (result.output as IMessageResponse).actions;
+    console.log(`[${agent.name}] Generated ${actions.length} action(s)`);
+
+    return actions;
   } catch (error) {
     const after = performance.now();
     console.error(

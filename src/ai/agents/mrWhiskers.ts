@@ -1,4 +1,5 @@
 import {
+  createImageTool,
   getConversationConfigTool,
   getUserContextTool,
   updateConversationConfigTool,
@@ -25,6 +26,7 @@ const anthropic = createAnthropic({
  * - updateConversationConfig: Update prioritization settings for incoming messages
  * - getUserContext: Retrieve stored user preferences and context
  * - updateUserContext: Store user preferences and context
+ * - createImage: Generate images from text prompts using AI
  */
 export const mrWhiskersAgent = createAgent({
   personality: mrWhiskersPersonality,
@@ -35,5 +37,6 @@ export const mrWhiskersAgent = createAgent({
     updateConversationConfig: updateConversationConfigTool,
     getUserContext: getUserContextTool,
     updateUserContext: updateUserContextTool,
+    createImage: createImageTool,
   },
 });
