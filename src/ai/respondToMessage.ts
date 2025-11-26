@@ -72,42 +72,61 @@ export async function respondToMessage(
 
     const after = performance.now();
     console.log(`[${agent.name}] Time taken: ${Math.round(after - before)}ms`);
-    
+
     // Log tool calls if any were made
     if (result.steps && result.steps.length > 0) {
-      console.log(`[${agent.name}] Tool calls made: ${result.steps.length}`);
-      result.steps.forEach((step, idx) => {
-        if (step.type === 'tool-call') {
-          console.log(`[${agent.name}] Tool call ${idx + 1}:`, {
-            tool: step.toolName,
-            args: step.args,
+      result.steps.forEach((step, stepIdx) => {
+        // Log tool calls from this step
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          step.toolCalls.forEach((toolCall) => {
+            console.log(`[${agent.name}] Tool call in step ${stepIdx + 1}:`, {
+              tool: toolCall.toolName,
+              input: toolCall.input,
+            });
           });
         }
-        if (step.type === 'tool-result') {
-          const result = step.result as { success?: boolean; message?: string };
-          
-          // Log errors prominently
-          if (result && typeof result === 'object' && result.success === false) {
-            console.error(`[${agent.name}] ❌ Tool FAILED ${idx + 1}:`, {
-              tool: step.toolName,
-              error: result.message || 'Unknown error',
-              fullResult: step.result,
-            });
-          } else {
-            console.log(`[${agent.name}] ✅ Tool result ${idx + 1}:`, {
-              tool: step.toolName,
-              result: step.result,
-            });
-          }
+
+        // Log tool results from this step
+        if (step.toolResults && step.toolResults.length > 0) {
+          step.toolResults.forEach((toolResult) => {
+            const output = toolResult.output as
+              | { success?: boolean; message?: string }
+              | undefined;
+
+            // Log errors prominently
+            if (
+              output &&
+              typeof output === "object" &&
+              output.success === false
+            ) {
+              console.error(
+                `[${agent.name}] ❌ Tool FAILED in step ${stepIdx + 1}:`,
+                {
+                  tool: toolResult.toolName,
+                  error: output.message || "Unknown error",
+                  fullOutput: toolResult.output,
+                },
+              );
+            } else {
+              console.log(
+                `[${agent.name}] ✅ Tool result in step ${stepIdx + 1}:`,
+                {
+                  tool: toolResult.toolName,
+                  output: toolResult.output,
+                },
+              );
+            }
+          });
         }
       });
     } else {
       console.log(`[${agent.name}] No tool calls were made`);
     }
-    
-    console.log(`[${agent.name}] Final actions:`, JSON.stringify((result.output as IMessageResponse).actions, null, 2));
 
-    return (result.output as IMessageResponse).actions;
+    const actions = (result.output as IMessageResponse).actions;
+    console.log(`[${agent.name}] Generated ${actions.length} action(s)`);
+
+    return actions;
   } catch (error) {
     const after = performance.now();
     console.error(
