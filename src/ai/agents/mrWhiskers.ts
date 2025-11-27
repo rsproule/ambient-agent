@@ -15,6 +15,11 @@ const anthropic = createAnthropic({
   baseURL: "https://echo.router.merit.systems",
 });
 
+const webSearchTool = anthropic.tools.webSearch_20250305({
+  maxUses: 5,
+});
+
+const webFetchTool = anthropic.tools.webFetch_20250910({ maxUses: 1 });
 /**
  * Mr Whiskers - A cat trying to be an executive assistant
  *
@@ -38,5 +43,8 @@ export const mrWhiskersAgent = createAgent({
     getUserContext: getUserContextTool,
     updateUserContext: updateUserContextTool,
     createImage: createImageTool,
+    // native anthropic tools
+    webSearch: webSearchTool,
+    web_fetch: webFetchTool,
   },
 });
