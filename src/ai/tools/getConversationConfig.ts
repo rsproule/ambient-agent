@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { Tool, tool } from "ai";
 import { z } from "zod";
 import { getPrioritizationConfig } from "@/src/db/prioritization";
 import { DEFAULT_CONFIG } from "@/src/services/prioritization";
@@ -9,7 +9,7 @@ import { DEFAULT_CONFIG } from "@/src/services/prioritization";
  * Allows the agent to check current settings for the conversation
  * so they can summarize them for the user.
  */
-export const getConversationConfigTool = tool({
+export const getConversationConfigTool: Tool = tool({
   description:
     "Get the current prioritization configuration for the conversation. " +
     "Use this when users ask about their current settings, notification thresholds, or filtering preferences. " +

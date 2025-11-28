@@ -1,5 +1,5 @@
 import type { ConversationContext } from "@/src/db/conversation";
-import type { LanguageModel } from "ai";
+import type { LanguageModel, Tool } from "ai";
 import type { z } from "zod";
 import type { AgentPersonality } from "./personalities";
 import {
@@ -29,8 +29,8 @@ export function createAgent<TSchema extends z.ZodType = z.ZodType>(options: {
   schema: TSchema;
   buildContext?: (context: ConversationContext) => string;
   systemPrompt?: string;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  tools?: Record<string, any>;
+
+  tools?: Record<string, Tool>;
 }): Agent<TSchema> {
   const {
     personality,

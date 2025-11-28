@@ -97,10 +97,11 @@ export async function saveUserMessage(
 
 /**
  * Save an assistant message to the database
+ * Supports both string content and structured content (for tool calls)
  */
 export async function saveAssistantMessage(
   conversationId: string,
-  content: string,
+  content: string | object,
   messageId?: string,
 ) {
   const conversation = await getOrCreateConversation(conversationId);
@@ -215,7 +216,23 @@ export async function getConversationMessages(
   // Convert to AI SDK format with preprocessing
   const formattedMessages = messages
     .map((msg) => formatMessageForAI(msg, conversation.isGroup))
-    .filter((msg) => !isEmptyMessage(msg));
+    .filter((msg) => !isEmptyMessage(msg))
+    .filter((msg) => {
+      // Filter out assistant messages with incomplete tool calls
+      // These cause "tool_use without tool_result" errors in Claude API
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        const hasToolUse = msg.content.some(
+          (block: any) => block.type === "tool_use",
+        );
+        if (hasToolUse) {
+          console.warn(
+            `[getConversationMessages] Filtering out assistant message with tool_use blocks to prevent API errors`,
+          );
+          return false;
+        }
+      }
+      return true;
+    });
 
   return {
     messages: formattedMessages,
@@ -235,13 +252,23 @@ export async function getConversationMessages(
 function formatMessageForAI(
   msg: {
     role: string;
-    content: string;
+    content: any; // Can be string or structured JSON (for tool calls)
     messageId: string | null;
     sender: string | null;
     attachments: string[];
   },
   isGroup: boolean,
 ): ModelMessage {
+  // If content is already structured (JSON object/array), use it directly for assistant messages
+  // This preserves tool_use and tool_result blocks
+  if (msg.role === "assistant" && typeof msg.content !== "string") {
+    return {
+      role: "assistant",
+      content: msg.content,
+    } as ModelMessage;
+  }
+
+  // For string content, apply formatting
   const content = buildMessageContent(msg);
 
   // System messages (merchant/service messages to be delivered)
@@ -268,12 +295,18 @@ function formatMessageForAI(
  * Build message content with attachments and message ID
  */
 function buildMessageContent(msg: {
-  content: string;
+  content: any; // Can be string or structured content
   messageId: string | null;
   attachments: string[];
 }):
   | string
   | Array<{ type: "text"; text: string } | { type: "image"; image: string }> {
+  // If content is not a string (structured content), we can't format it further
+  // This should only happen for assistant messages with tool calls which are handled separately
+  if (typeof msg.content !== "string") {
+    return msg.content;
+  }
+
   const hasAttachments = msg.attachments && msg.attachments.length > 0;
 
   // Simple text-only message

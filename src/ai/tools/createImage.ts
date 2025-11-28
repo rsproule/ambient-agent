@@ -1,6 +1,6 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { put } from "@vercel/blob";
-import { generateText, tool } from "ai";
+import { generateText, Tool, tool } from "ai";
 import { z } from "zod";
 
 /**
@@ -30,7 +30,7 @@ function base64ToBuffer(base64DataUrl: string): Buffer {
  *
  * Uploads generated images to Vercel Blob storage and returns the URL.
  */
-export const createImageTool = tool({
+export const createImageTool: Tool = tool({
   description:
     "Generate an image from a text prompt using AI. " +
     "Use this to create visual content based on descriptions. " +

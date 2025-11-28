@@ -33,7 +33,7 @@ model Message {
   conversationId  String
   conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role            String // "user", "assistant", or "system"
-  content         String       @db.Text
+  content         Json // Support both string and structured content (for tool calls)
   sender          String? // phone number for user messages or source for system messages
   messageId       String? // LoopMessage message_id
   attachments     String[] // Array of attachment URLs
