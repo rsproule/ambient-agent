@@ -4,6 +4,8 @@
  * This module exports all available tools that AI agents can use to:
  * - Read and update conversation configuration (prioritization settings)
  * - Read and update user context and preferences
+ * - Generate magic links for account connections
+ * - Create images
  */
 
 export { getConversationConfigTool } from "./getConversationConfig";
@@ -11,4 +13,5 @@ export { updateConversationConfigTool } from "./updateConversationConfig";
 export { getUserContextTool } from "./getUserContext";
 export { updateUserContextTool } from "./updateUserContext";
 export { createImageTool } from "./createImage";
+export { generateConnectionLinkTool } from "./generateConnectionLink";
 
