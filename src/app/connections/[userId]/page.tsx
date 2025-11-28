@@ -6,9 +6,9 @@ import {
   getAllProviders,
   type ProviderConfig,
 } from "@/src/lib/pipedream/providers";
+import { Unplug } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { Unplug } from "lucide-react";
 
 interface Connection {
   id: string;
