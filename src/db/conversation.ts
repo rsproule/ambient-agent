@@ -1,4 +1,5 @@
 import prisma from "@/src/db/client";
+import type { Prisma } from "@/src/generated/prisma";
 import type { ModelMessage } from "ai";
 
 export interface ConversationMessage {
@@ -79,7 +80,7 @@ export async function saveUserMessage(
     data: {
       conversationId: conversation.id,
       role: "user",
-      content,
+      content: content as Prisma.InputJsonValue,
       sender,
       messageId,
       attachments,
@@ -110,7 +111,7 @@ export async function saveAssistantMessage(
     data: {
       conversationId: conversation.id,
       role: "assistant",
-      content,
+      content: content as Prisma.InputJsonValue,
       messageId,
       attachments: [], // Assistant messages can have attachments too
     },
@@ -135,7 +136,7 @@ export async function saveSystemMessage(
     data: {
       conversationId: conversation.id,
       role: "system",
-      content,
+      content: content as Prisma.InputJsonValue,
       sender: source, // Track the merchant/service source
       attachments: [],
       forwarded,
@@ -222,7 +223,7 @@ export async function getConversationMessages(
       // These cause "tool_use without tool_result" errors in Claude API
       if (msg.role === "assistant" && Array.isArray(msg.content)) {
         const hasToolUse = msg.content.some(
-          (block: any) => block.type === "tool_use",
+          (block: { type?: string }) => block.type === "tool_use",
         );
         if (hasToolUse) {
           console.warn(
@@ -252,7 +253,7 @@ export async function getConversationMessages(
 function formatMessageForAI(
   msg: {
     role: string;
-    content: any; // Can be string or structured JSON (for tool calls)
+    content: unknown; // Can be string or structured JSON (for tool calls)
     messageId: string | null;
     sender: string | null;
     attachments: string[];
@@ -295,7 +296,7 @@ function formatMessageForAI(
  * Build message content with attachments and message ID
  */
 function buildMessageContent(msg: {
-  content: any; // Can be string or structured content
+  content: unknown; // Can be string or structured content
   messageId: string | null;
   attachments: string[];
 }):
@@ -304,7 +305,9 @@ function buildMessageContent(msg: {
   // If content is not a string (structured content), we can't format it further
   // This should only happen for assistant messages with tool calls which are handled separately
   if (typeof msg.content !== "string") {
-    return msg.content;
+    return msg.content as Array<
+      { type: "text"; text: string } | { type: "image"; image: string }
+    >;
   }
 
   const hasAttachments = msg.attachments && msg.attachments.length > 0;

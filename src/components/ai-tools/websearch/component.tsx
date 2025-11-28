@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import type { WebSearchItem } from "./schema"
-import { Loader } from "@/components/loader"
-import { CodeBlock } from "@/components/code-block"
+import { Loader } from "@/src/components/loader"
+import { CodeBlock } from "@/src/components/code-block"
 import {
   InlineCitationCard,
   InlineCitationCardBody,
@@ -16,17 +16,17 @@ import {
   InlineCitationCarouselNext,
   InlineCitationCarouselPrev,
   InlineCitationSource,
-} from "@/components/inline-citation"
+} from "@/src/components/inline-citation"
 import {
   Sources,
   SourcesContent,
   SourcesTrigger,
   Source as SourcesItem,
-} from "@/components/sources"
+} from "@/src/components/sources"
 import { WebSearchToolInvocation } from "./tool"
 import { cn } from "@/src/lib/utils"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Skeleton } from "@/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/src/components/ui/card"
+import { Skeleton } from "@/src/components/ui/skeleton"
 
 export function WebSearchList({
   invocation,

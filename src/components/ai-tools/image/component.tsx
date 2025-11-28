@@ -3,12 +3,12 @@
 import * as React from "react"
 import { ImageToolType } from "./tool"
 import { type ImageInput, type ImageItem } from "./schema"
-import { Loader } from "@/components/loader"
-import { Badge } from "@/components/ui/badge"
+import { Loader } from "@/src/components/loader"
+import { Badge } from "@/src/components/ui/badge"
 import { cn } from "@/src/lib/utils"
 
-import { Skeleton } from "@/components/ui/skeleton"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { Skeleton } from "@/src/components/ui/skeleton"
+import { Card, CardContent, CardHeader } from "@/src/components/ui/card"
 
 export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
   const part = invocation
