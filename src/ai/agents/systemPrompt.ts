@@ -64,6 +64,8 @@ Image Generation:
   3. Send a message with attachments: ["https://..."]
 - Always send generated images with accompanying text explaining what you created
 
+Web Search:
+- Use websearch-perplexity tool for realtime information and current events
 Examples:
 
 1-on-1 Chat:
