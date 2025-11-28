@@ -4,10 +4,10 @@
  * Example utilities for working with connected Gmail accounts
  */
 
-import { google } from "googleapis";
 import { getConnection, updateConnection } from "@/src/db/connection";
-import { pipedreamClient } from "@/src/lib/pipedream/client";
+import { getRefreshedAccount } from "@/src/lib/pipedream/client";
 import type { gmail_v1 } from "googleapis";
+import { google } from "googleapis";
 
 /**
  * Get an authenticated Gmail client, refreshing token if necessary
@@ -25,28 +25,33 @@ async function getGmailClient(userId: string): Promise<gmail_v1.Gmail> {
       throw new Error("Missing Pipedream account ID");
     }
 
-    const refreshed = await pipedreamClient.refreshToken(
-      connection.pipedreamAccountId,
-    );
+    const refreshed = await getRefreshedAccount(connection.pipedreamAccountId);
+
+    // Extract OAuth credentials from the credentials object
+    const credentials = refreshed.credentials as
+      | Record<string, unknown>
+      | undefined;
+    const oauthAccessToken = credentials?.oauth_access_token as
+      | string
+      | undefined;
+    const oauthRefreshToken = credentials?.oauth_refresh_token as
+      | string
+      | undefined;
 
     // Update connection with new tokens
     await updateConnection(userId, "google_gmail", {
-      accessToken: refreshed.auth_provision?.oauth_access_token,
-      refreshToken: refreshed.auth_provision?.oauth_refresh_token,
-      expiresAt: refreshed.auth_provision?.expires_at
-        ? new Date(refreshed.auth_provision.expires_at * 1000)
-        : undefined,
+      accessToken: oauthAccessToken,
+      refreshToken: oauthRefreshToken,
+      expiresAt: refreshed.expiresAt,
       lastSyncedAt: new Date(),
     });
 
     // Create OAuth2 client with refreshed token
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({
-      access_token: refreshed.auth_provision?.oauth_access_token,
-      refresh_token: refreshed.auth_provision?.oauth_refresh_token,
-      expiry_date: refreshed.auth_provision?.expires_at
-        ? refreshed.auth_provision.expires_at * 1000
-        : undefined,
+      access_token: oauthAccessToken,
+      refresh_token: oauthRefreshToken,
+      expiry_date: refreshed.expiresAt?.getTime(),
     });
 
     return google.gmail({ version: "v1", auth: oauth2Client });
@@ -127,7 +132,9 @@ export async function sendGmailMessage(
   const email = [
     `To: ${options.to}`,
     `Subject: ${options.subject}`,
-    `Content-Type: ${options.isHtml ? "text/html" : "text/plain"}; charset=utf-8`,
+    `Content-Type: ${
+      options.isHtml ? "text/html" : "text/plain"
+    }; charset=utf-8`,
     "",
     options.body,
   ].join("\r\n");
@@ -159,4 +166,3 @@ export async function searchGmailMessages(
 ): Promise<gmail_v1.Schema$ListMessagesResponse> {
   return listGmailMessages(userId, { q: query, maxResults });
 }
-

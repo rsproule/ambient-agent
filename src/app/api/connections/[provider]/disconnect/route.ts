@@ -5,7 +5,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getConnection, updateConnection } from "@/src/db/connection";
-import { pipedreamClient } from "@/src/lib/pipedream/client";
+import { deleteAccount } from "@/src/lib/pipedream/client";
 import type { ConnectionProvider } from "@/src/generated/prisma";
 
 export async function POST(
@@ -36,7 +36,7 @@ export async function POST(
     // Delete from Pipedream if we have an account ID
     if (connection.pipedreamAccountId) {
       try {
-        await pipedreamClient.deleteAccount(connection.pipedreamAccountId);
+        await deleteAccount(connection.pipedreamAccountId);
       } catch (error) {
         console.error("Error deleting Pipedream account:", error);
         // Continue anyway to update our database

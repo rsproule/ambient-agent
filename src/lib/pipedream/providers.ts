@@ -2,11 +2,14 @@
  * Provider configurations for different OAuth integrations
  */
 
+import type { LucideIcon } from "lucide-react";
+import { Mail, Calendar, Github } from "lucide-react";
+
 export interface ProviderConfig {
   id: string;
   name: string;
   app: string; // Pipedream app identifier
-  icon: string;
+  icon: LucideIcon;
   scopes: string[];
   description: string;
 }
@@ -16,7 +19,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     id: "google_gmail",
     name: "Gmail",
     app: "gmail",
-    icon: "📧",
+    icon: Mail,
     scopes: [
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.compose",
@@ -28,7 +31,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     id: "google_calendar",
     name: "Google Calendar",
     app: "google_calendar",
-    icon: "📅",
+    icon: Calendar,
     scopes: [
       "https://www.googleapis.com/auth/calendar.readonly",
       "https://www.googleapis.com/auth/calendar.events",
@@ -39,7 +42,7 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
     id: "github",
     name: "GitHub",
     app: "github",
-    icon: "🐙",
+    icon: Github,
     scopes: [
       "repo",
       "read:user",

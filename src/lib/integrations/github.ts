@@ -4,15 +4,20 @@
  * Example utilities for working with connected GitHub accounts
  */
 
-import { Octokit } from "@octokit/rest";
 import { getConnection, updateConnection } from "@/src/db/connection";
-import { pipedreamClient } from "@/src/lib/pipedream/client";
-import type { components } from "@octokit/openapi-types";
+import { getRefreshedAccount } from "@/src/lib/pipedream/client";
+import { Octokit } from "@octokit/rest";
 
-// Use official GitHub types
-export type GitHubRepo = components["schemas"]["repository"];
-export type GitHubUser = components["schemas"]["private-user"];
-export type GitHubPullRequest = components["schemas"]["pull-request"];
+// Use Octokit REST API response types
+export type GitHubRepo = Awaited<
+  ReturnType<Octokit["rest"]["repos"]["get"]>
+>["data"];
+export type GitHubUser = Awaited<
+  ReturnType<Octokit["rest"]["users"]["getAuthenticated"]>
+>["data"];
+export type GitHubPullRequest = Awaited<
+  ReturnType<Octokit["rest"]["pulls"]["get"]>
+>["data"];
 
 /**
  * Get an authenticated GitHub client, refreshing token if necessary
@@ -30,22 +35,29 @@ async function getGitHubClient(userId: string): Promise<Octokit> {
       throw new Error("Missing Pipedream account ID");
     }
 
-    const refreshed = await pipedreamClient.refreshToken(
-      connection.pipedreamAccountId,
-    );
+    const refreshed = await getRefreshedAccount(connection.pipedreamAccountId);
+
+    // Extract OAuth credentials from the credentials object
+    const credentials = refreshed.credentials as
+      | Record<string, unknown>
+      | undefined;
+    const oauthAccessToken = credentials?.oauth_access_token as
+      | string
+      | undefined;
+    const oauthRefreshToken = credentials?.oauth_refresh_token as
+      | string
+      | undefined;
 
     // Update connection with new tokens
     await updateConnection(userId, "github", {
-      accessToken: refreshed.auth_provision?.oauth_access_token,
-      refreshToken: refreshed.auth_provision?.oauth_refresh_token,
-      expiresAt: refreshed.auth_provision?.expires_at
-        ? new Date(refreshed.auth_provision.expires_at * 1000)
-        : undefined,
+      accessToken: oauthAccessToken,
+      refreshToken: oauthRefreshToken,
+      expiresAt: refreshed.expiresAt,
       lastSyncedAt: new Date(),
     });
 
     return new Octokit({
-      auth: refreshed.auth_provision?.oauth_access_token,
+      auth: oauthAccessToken,
     });
   }
 
@@ -164,4 +176,3 @@ export async function getGitHubActivitySummary(userId: string) {
     })),
   };
 }
-

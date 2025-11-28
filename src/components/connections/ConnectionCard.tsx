@@ -1,15 +1,8 @@
 "use client";
 
-import { Badge } from "@/src/components/ui/badge";
 import { Button } from "@/src/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/src/components/ui/card";
 import type { ProviderConfig } from "@/src/lib/pipedream/providers";
+import { Check, Settings } from "lucide-react";
 import { useState } from "react";
 
 interface Connection {
@@ -35,7 +28,6 @@ export function ConnectionCard({
   onDisconnect,
 }: ConnectionCardProps) {
   const [isLoading, setIsLoading] = useState(false);
-
   const isConnected = connection?.status === "connected";
 
   const handleConnect = async () => {
@@ -56,74 +48,46 @@ export function ConnectionCard({
     }
   };
 
+  const Icon = provider.icon;
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">{provider.icon}</span>
-            <div>
-              <CardTitle className="text-xl">{provider.name}</CardTitle>
-              <CardDescription className="mt-1">
-                {provider.description}
-              </CardDescription>
-            </div>
-          </div>
-          {isConnected && (
-            <Badge variant="default" className="bg-green-500">
-              Connected
-            </Badge>
-          )}
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {connection?.accountEmail && (
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Account:</span>{" "}
+    <div className="flex items-center justify-between border-b py-4">
+      <div className="flex items-center gap-3">
+        <Icon className="h-5 w-5 text-muted-foreground" />
+        <div>
+          <div className="font-medium">{provider.name}</div>
+          {isConnected && connection?.accountEmail && (
+            <div className="text-xs text-muted-foreground">
               {connection.accountEmail}
             </div>
           )}
-
-          {connection?.lastSyncedAt && (
-            <div className="text-sm text-muted-foreground">
-              <span className="font-medium">Last synced:</span>{" "}
-              {new Date(connection.lastSyncedAt).toLocaleDateString()}
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {isConnected ? (
-              <Button
-                variant="destructive"
-                onClick={handleDisconnect}
-                disabled={isLoading}
-              >
-                {isLoading ? "Disconnecting..." : "Disconnect"}
-              </Button>
-            ) : (
-              <Button onClick={handleConnect} disabled={isLoading}>
-                {isLoading ? "Connecting..." : "Connect"}
-              </Button>
-            )}
-          </div>
-
-          {provider.scopes.length > 0 && (
-            <details className="text-xs text-muted-foreground">
-              <summary className="cursor-pointer hover:text-foreground">
-                Permissions requested
-              </summary>
-              <ul className="mt-2 space-y-1 pl-4">
-                {provider.scopes.map((scope) => (
-                  <li key={scope} className="list-disc">
-                    {scope}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <div className="flex items-center gap-2">
+        {isConnected ? (
+          <>
+            <Check className="h-5 w-5 text-green-600" />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDisconnect}
+              disabled={isLoading}
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </>
+        ) : (
+          <Button
+            size="sm"
+            onClick={handleConnect}
+            disabled={isLoading}
+            className="text-xs"
+          >
+            {isLoading ? "..." : "Connect"}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }

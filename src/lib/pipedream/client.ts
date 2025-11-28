@@ -1,82 +1,110 @@
 /**
  * Pipedream API Client
  *
- * Handles OAuth connections and API interactions with Pipedream
+ * Direct export of the official Pipedream SDK client
+ * Documentation: https://github.com/PipedreamHQ/pipedream-sdk-typescript
  */
 
-import { createClient } from "@pipedream/sdk";
-import { env } from "@/src/lib/config/env";
-import type {
-  ConnectedAccount,
-  ConnectTokenResponse,
-} from "@pipedream/sdk/dist/connect";
+import { pipedreamConfig } from "@/src/lib/config/env";
+import * as Pipedream from "@pipedream/sdk";
 
-export interface PipedreamAppConfig {
-  app: string;
-  scopes: string[];
-  redirectUri: string;
+// Initialize the Pipedream SDK client
+const clientId = pipedreamConfig.clientId;
+const clientSecret = pipedreamConfig.clientSecret;
+const projectId = pipedreamConfig.projectId;
+const projectEnvironment = pipedreamConfig.projectEnvironment || "production";
+
+if (!clientId || !clientSecret || !projectId) {
+  console.warn(
+    "⚠️ Pipedream credentials not configured. Set PIPEDREAM_CLIENT_ID, PIPEDREAM_CLIENT_SECRET, and PIPEDREAM_PROJECT_ID",
+  );
 }
 
-export class PipedreamClient {
-  private client: ReturnType<typeof createClient>;
+// Validate project environment - must be "development" or "production"
+const validEnvironment = (
+  projectEnvironment === "development" ? "development" : "production"
+) as "development" | "production";
 
-  constructor(apiKey?: string) {
-    this.client = createClient({
-      projectId: env.TRIGGER_PROJECT_ID || "imessage-pipeline",
-      credentials: {
-        keys: { secret: apiKey || env.PIPEDREAM_API_KEY || "" },
-      },
-    });
-  }
+// Export configured Pipedream client
+export const pipedream = new Pipedream.PipedreamClient({
+  clientId: clientId || "",
+  clientSecret: clientSecret || "",
+  projectId: projectId || "",
+  projectEnvironment: validEnvironment,
+});
 
-  /**
-   * Generate a Pipedream Connect link for OAuth flow
-   */
-  async createConnectToken(
-    config: PipedreamAppConfig,
-  ): Promise<ConnectTokenResponse> {
-    const response = await this.client.createConnectToken({
-      app: config.app,
-      external_id: crypto.randomUUID(),
-      ...(env.PIPEDREAM_OAUTH_APP_ID && {
-        oauth_app_id: env.PIPEDREAM_OAUTH_APP_ID,
-      }),
-    });
+/**
+ * Helper methods for common Pipedream operations with proper typing
+ */
 
-    return response;
-  }
-
-  /**
-   * Get connected account details
-   */
-  async getAccount(accountId: string): Promise<ConnectedAccount> {
-    const response = await this.client.getConnectedAccount(accountId);
-    return response;
-  }
-
-  /**
-   * Delete a connected account
-   */
-  async deleteAccount(accountId: string): Promise<void> {
-    await this.client.deleteConnectedAccount(accountId);
-  }
-
-  /**
-   * Refresh OAuth tokens for an account
-   */
-  async refreshToken(accountId: string): Promise<ConnectedAccount> {
-    const response = await this.client.refreshConnectedAccountToken(accountId);
-    return response;
-  }
-
-  /**
-   * List all connected accounts
-   */
-  async listAccounts(): Promise<ConnectedAccount[]> {
-    const response = await this.client.listConnectedAccounts();
-    return response.data || [];
-  }
+/**
+ * Create a Connect token for a user with optional configuration
+ */
+export async function createConnectToken(
+  externalUserId: string,
+  options?: {
+    successRedirectUri?: string;
+    errorRedirectUri?: string;
+    allowedOrigins?: string[];
+  },
+): Promise<Pipedream.CreateTokenResponse> {
+  return pipedream.tokens.create({
+    externalUserId,
+    successRedirectUri: options?.successRedirectUri,
+    errorRedirectUri: options?.errorRedirectUri,
+    allowedOrigins: options?.allowedOrigins,
+  });
 }
 
-export const pipedreamClient = new PipedreamClient();
+/**
+ * Get account details by ID
+ */
+export async function getAccount(
+  accountId: string,
+  includeCredentials = true,
+): Promise<Pipedream.Account> {
+  return pipedream.accounts.retrieve(accountId, {
+    includeCredentials,
+  });
+}
 
+/**
+ * Delete an account by ID
+ */
+export async function deleteAccount(accountId: string): Promise<void> {
+  return pipedream.accounts.delete(accountId);
+}
+
+/**
+ * List all accounts for a user
+ */
+export async function listUserAccounts(
+  externalUserId: string,
+  options?: {
+    app?: string;
+    includeCredentials?: boolean;
+  },
+): Promise<Pipedream.Account[]> {
+  const accounts: Pipedream.Account[] = [];
+  const page = await pipedream.accounts.list({
+    externalUserId,
+    app: options?.app,
+    includeCredentials: options?.includeCredentials ?? false,
+  });
+
+  for await (const account of page) {
+    accounts.push(account);
+  }
+
+  return accounts;
+}
+
+/**
+ * Get refreshed credentials for an account
+ * Re-fetches the account to get the latest credentials
+ */
+export async function getRefreshedAccount(
+  accountId: string,
+): Promise<Pipedream.Account> {
+  return getAccount(accountId, true);
+}

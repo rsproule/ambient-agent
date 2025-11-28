@@ -23,7 +23,10 @@ const envSchema = z.object({
     .min(1, "LOOP_WEBHOOK_SECRET_KEY is required"),
 
   // Pipedream configuration
-  PIPEDREAM_API_KEY: z.string().min(1, "PIPEDREAM_API_KEY is required"),
+  PIPEDREAM_CLIENT_ID: z.string().optional(),
+  PIPEDREAM_CLIENT_SECRET: z.string().optional(),
+  PIPEDREAM_PROJECT_ID: z.string().optional(),
+  PIPEDREAM_PROJECT_ENVIRONMENT: z.string().optional().default("production"),
   PIPEDREAM_OAUTH_APP_ID: z.string().optional(),
 
   // NextAuth (using magic link authentication)
@@ -103,8 +106,17 @@ export const loopConfig = {
 };
 
 export const pipedreamConfig = {
-  get apiKey() {
-    return env.PIPEDREAM_API_KEY;
+  get clientId() {
+    return env.PIPEDREAM_CLIENT_ID;
+  },
+  get clientSecret() {
+    return env.PIPEDREAM_CLIENT_SECRET;
+  },
+  get projectId() {
+    return env.PIPEDREAM_PROJECT_ID;
+  },
+  get projectEnvironment() {
+    return env.PIPEDREAM_PROJECT_ENVIRONMENT;
   },
   get oauthAppId() {
     return env.PIPEDREAM_OAUTH_APP_ID;

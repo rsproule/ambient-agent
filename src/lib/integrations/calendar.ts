@@ -5,7 +5,7 @@
  */
 
 import { getConnection, updateConnection } from "@/src/db/connection";
-import { pipedreamClient } from "@/src/lib/pipedream/client";
+import { getRefreshedAccount } from "@/src/lib/pipedream/client";
 import type { calendar_v3 } from "googleapis";
 import { google } from "googleapis";
 
@@ -27,28 +27,33 @@ async function getCalendarClient(
       throw new Error("Missing Pipedream account ID");
     }
 
-    const refreshed = await pipedreamClient.refreshToken(
-      connection.pipedreamAccountId,
-    );
+    const refreshed = await getRefreshedAccount(connection.pipedreamAccountId);
+
+    // Extract OAuth credentials from the credentials object
+    const credentials = refreshed.credentials as
+      | Record<string, unknown>
+      | undefined;
+    const oauthAccessToken = credentials?.oauth_access_token as
+      | string
+      | undefined;
+    const oauthRefreshToken = credentials?.oauth_refresh_token as
+      | string
+      | undefined;
 
     // Update connection with new tokens
     await updateConnection(userId, "google_calendar", {
-      accessToken: refreshed.auth_provision?.oauth_access_token,
-      refreshToken: refreshed.auth_provision?.oauth_refresh_token,
-      expiresAt: refreshed.auth_provision?.expires_at
-        ? new Date(refreshed.auth_provision.expires_at * 1000)
-        : undefined,
+      accessToken: oauthAccessToken,
+      refreshToken: oauthRefreshToken,
+      expiresAt: refreshed.expiresAt,
       lastSyncedAt: new Date(),
     });
 
     // Create OAuth2 client with refreshed token
     const oauth2Client = new google.auth.OAuth2();
     oauth2Client.setCredentials({
-      access_token: refreshed.auth_provision?.oauth_access_token,
-      refresh_token: refreshed.auth_provision?.oauth_refresh_token,
-      expiry_date: refreshed.auth_provision?.expires_at
-        ? refreshed.auth_provision.expires_at * 1000
-        : undefined,
+      access_token: oauthAccessToken,
+      refresh_token: oauthRefreshToken,
+      expiry_date: refreshed.expiresAt?.getTime(),
     });
 
     return google.calendar({ version: "v3", auth: oauth2Client });

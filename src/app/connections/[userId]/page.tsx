@@ -1,10 +1,14 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { ConnectionCard } from "@/src/components/connections/ConnectionCard";
-import { getAllProviders, type ProviderConfig } from "@/src/lib/pipedream/providers";
 import { Loader } from "@/src/components/loader";
+import {
+  getAllProviders,
+  type ProviderConfig,
+} from "@/src/lib/pipedream/providers";
+import { useRouter, useSearchParams } from "next/navigation";
+import { use, useEffect, useState } from "react";
+import { Unplug } from "lucide-react";
 
 interface Connection {
   id: string;
@@ -106,11 +110,14 @@ export default function ConnectionsPage({
     }
 
     try {
-      const response = await fetch(`/api/connections/${provider.id}/disconnect`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
+      const response = await fetch(
+        `/api/connections/${provider.id}/disconnect`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        },
+      );
 
       if (!response.ok) throw new Error("Failed to disconnect");
 
@@ -119,8 +126,8 @@ export default function ConnectionsPage({
         prev.map((conn) =>
           conn.provider === provider.id
             ? { ...conn, status: "disconnected" as const }
-            : conn
-        )
+            : conn,
+        ),
       );
 
       setNotification({
@@ -145,27 +152,31 @@ export default function ConnectionsPage({
   }
 
   return (
-    <div className="container mx-auto max-w-5xl px-4 py-12 pt-24">
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold">Connected Accounts</h1>
-        <p className="mt-2 text-lg text-muted-foreground">
-          Connect your accounts to enable integrations
+    <div className="container mx-auto max-w-3xl px-4 py-8 pt-24">
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Unplug className="h-6 w-6" />
+          <h1 className="text-2xl font-semibold">Connections</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Connect your accounts to let Mr. Whiskers manage emails, calendar
+          events, and more on your behalf.
         </p>
       </div>
 
       {notification && (
         <div
-          className={`mb-6 rounded-lg p-4 ${
+          className={`mb-4 rounded p-3 text-sm ${
             notification.type === "success"
-              ? "bg-green-50 text-green-800 border border-green-200"
-              : "bg-red-50 text-red-800 border border-red-200"
+              ? "bg-green-50 text-green-900 border border-green-200"
+              : "bg-red-50 text-red-900 border border-red-200"
           }`}
         >
           <div className="flex items-center justify-between">
             <p>{notification.message}</p>
             <button
               onClick={() => setNotification(null)}
-              className="text-lg font-bold"
+              className="text-lg font-bold ml-4"
             >
               ×
             </button>
@@ -173,10 +184,10 @@ export default function ConnectionsPage({
         </div>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="border rounded-lg px-4">
         {providers.map((provider) => {
           const connection = connections.find(
-            (c) => c.provider === provider.id
+            (c) => c.provider === provider.id,
           );
 
           return (
@@ -184,32 +195,12 @@ export default function ConnectionsPage({
               key={provider.id}
               provider={provider}
               connection={connection}
-              userId={userId}
               onConnect={() => handleConnect(provider)}
               onDisconnect={() => handleDisconnect(provider)}
             />
           );
         })}
       </div>
-
-      <div className="mt-12 rounded-lg border bg-muted/50 p-6">
-        <h2 className="text-xl font-semibold mb-3">About Connections</h2>
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            • All connections are secured using OAuth 2.0 and managed through Pipedream
-          </p>
-          <p>
-            • Your credentials are encrypted and stored securely
-          </p>
-          <p>
-            • You can disconnect any account at any time
-          </p>
-          <p>
-            • Permissions are only used for the features you enable
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
-
