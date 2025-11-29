@@ -1,79 +1,130 @@
 /**
  * Google Calendar Integration Utilities
  *
- * Example utilities for working with connected Google Calendar accounts
+ * Uses Pipedream Connect's proxy to make authenticated Google Calendar API calls
+ * Documentation: https://pipedream.com/docs/connect/quickstart
  */
 
-import { getConnection, updateConnection } from "@/src/db/connection";
-import { getRefreshedAccount } from "@/src/lib/pipedream/client";
+import { getConnection } from "@/src/db/connection";
+import { pipedream } from "@/src/lib/pipedream/client";
 import type { calendar_v3 } from "googleapis";
-import { google } from "googleapis";
 
 /**
- * Get an authenticated Calendar client, refreshing token if necessary
+ * Get connection info for making proxied Calendar API calls
  */
-async function getCalendarClient(
-  userId: string,
-): Promise<calendar_v3.Calendar> {
+async function getCalendarConnection(userId: string) {
+  console.log(
+    "[getCalendarConnection] Looking up connection for userId:",
+    userId,
+  );
+
   const connection = await getConnection(userId, "google_calendar");
+
+  console.log("[getCalendarConnection] Connection lookup result:", {
+    found: !!connection,
+    status: connection?.status,
+    pipedreamAccountId: connection?.pipedreamAccountId,
+  });
 
   if (!connection || connection.status !== "connected") {
     throw new Error("Google Calendar not connected");
   }
 
-  // Check if token needs refresh
-  if (connection.expiresAt && new Date() > connection.expiresAt) {
-    if (!connection.pipedreamAccountId) {
-      throw new Error("Missing Pipedream account ID");
-    }
-
-    const refreshed = await getRefreshedAccount(connection.pipedreamAccountId);
-
-    // Extract OAuth credentials from the credentials object
-    const credentials = refreshed.credentials as
-      | Record<string, unknown>
-      | undefined;
-    const oauthAccessToken = credentials?.oauth_access_token as
-      | string
-      | undefined;
-    const oauthRefreshToken = credentials?.oauth_refresh_token as
-      | string
-      | undefined;
-
-    // Update connection with new tokens
-    await updateConnection(userId, "google_calendar", {
-      accessToken: oauthAccessToken,
-      refreshToken: oauthRefreshToken,
-      expiresAt: refreshed.expiresAt,
-      lastSyncedAt: new Date(),
-    });
-
-    // Create OAuth2 client with refreshed token
-    const oauth2Client = new google.auth.OAuth2();
-    oauth2Client.setCredentials({
-      access_token: oauthAccessToken,
-      refresh_token: oauthRefreshToken,
-      expiry_date: refreshed.expiresAt?.getTime(),
-    });
-
-    return google.calendar({ version: "v3", auth: oauth2Client });
+  if (!connection.pipedreamAccountId) {
+    throw new Error("Missing Pipedream account ID");
   }
 
-  if (!connection.accessToken) {
-    throw new Error("No access token available");
-  }
+  return {
+    accountId: connection.pipedreamAccountId,
+    externalUserId: connection.userId,
+  };
+}
 
-  // Create OAuth2 client with existing token
-  const oauth2Client = new google.auth.OAuth2();
-  oauth2Client.setCredentials({
-    access_token: connection.accessToken,
-    refresh_token: connection.refreshToken || undefined,
-    expiry_date: connection.expiresAt
-      ? connection.expiresAt.getTime()
-      : undefined,
+/**
+ * Make an authenticated GET request to Google Calendar API via Pipedream proxy
+ */
+async function calendarProxyGet<T>(
+  userId: string,
+  path: string,
+  params?: Record<string, string | object | string[] | object[] | null>,
+): Promise<T> {
+  const { accountId, externalUserId } = await getCalendarConnection(userId);
+
+  const url = `https://www.googleapis.com/calendar/v3${path}`;
+
+  console.log("[calendarProxyGet] Making request:", { url, params, accountId });
+
+  try {
+    const response = await pipedream.proxy.get({
+      url,
+      accountId,
+      externalUserId,
+      params,
+    });
+
+    console.log("[calendarProxyGet] Response type:", typeof response);
+    console.log(
+      "[calendarProxyGet] Response keys:",
+      response && typeof response === "object" ? Object.keys(response) : "N/A",
+    );
+    console.log(
+      "[calendarProxyGet] Full response:",
+      JSON.stringify(response, null, 2),
+    );
+
+    // The response might be the body directly, not wrapped
+    return response as T;
+  } catch (error) {
+    console.error("[calendarProxyGet] Error:", error);
+    throw error;
+  }
+}
+
+/**
+ * Make an authenticated POST request to Google Calendar API via Pipedream proxy
+ */
+async function calendarProxyPost<T>(
+  userId: string,
+  path: string,
+  body?: Record<string, unknown>,
+  params?: Record<string, string | object | string[] | object[] | null>,
+): Promise<T> {
+  const { accountId, externalUserId } = await getCalendarConnection(userId);
+
+  const url = `https://www.googleapis.com/calendar/v3${path}`;
+
+  console.log("[calendarProxyPost] Making request:", {
+    url,
+    body,
+    params,
+    accountId,
   });
 
-  return google.calendar({ version: "v3", auth: oauth2Client });
+  try {
+    const response = await pipedream.proxy.post({
+      url,
+      accountId,
+      externalUserId,
+      body: body as Record<string, unknown>,
+      params,
+    });
+
+    console.log("[calendarProxyPost] Response type:", typeof response);
+    console.log(
+      "[calendarProxyPost] Response keys:",
+      response && typeof response === "object" ? Object.keys(response) : "N/A",
+    );
+    console.log(
+      "[calendarProxyPost] Full response:",
+      JSON.stringify(response, null, 2),
+    );
+
+    // The response might be the body directly, not wrapped
+    return response as T;
+  } catch (error) {
+    console.error("[calendarProxyPost] Error:", error);
+    throw error;
+  }
 }
 
 /**
@@ -89,20 +140,28 @@ export async function listCalendarEvents(
     pageToken?: string;
   },
 ): Promise<calendar_v3.Schema$Events> {
-  const calendar = await getCalendarClient(userId);
   const calendarId = options?.calendarId || "primary";
 
-  const response = await calendar.events.list({
-    calendarId,
-    maxResults: options?.maxResults || 10,
-    singleEvents: true,
+  const params: Record<string, string | object | string[] | object[] | null> = {
+    maxResults: String(options?.maxResults || 10),
+    singleEvents: "true",
     orderBy: "startTime",
     timeMin: (options?.timeMin || new Date()).toISOString(),
-    timeMax: options?.timeMax?.toISOString(),
-    pageToken: options?.pageToken,
-  });
+  };
 
-  return response.data;
+  if (options?.timeMax) {
+    params.timeMax = options.timeMax.toISOString();
+  }
+
+  if (options?.pageToken) {
+    params.pageToken = options.pageToken;
+  }
+
+  return calendarProxyGet(
+    userId,
+    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    params,
+  );
 }
 
 /**
@@ -113,14 +172,12 @@ export async function getCalendarEvent(
   eventId: string,
   calendarId = "primary",
 ): Promise<calendar_v3.Schema$Event> {
-  const calendar = await getCalendarClient(userId);
-
-  const response = await calendar.events.get({
-    calendarId,
-    eventId,
-  });
-
-  return response.data;
+  return calendarProxyGet(
+    userId,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(
+      eventId,
+    )}`,
+  );
 }
 
 /**
@@ -131,14 +188,11 @@ export async function createCalendarEvent(
   event: calendar_v3.Schema$Event,
   calendarId = "primary",
 ): Promise<calendar_v3.Schema$Event> {
-  const calendar = await getCalendarClient(userId);
-
-  const response = await calendar.events.insert({
-    calendarId,
-    requestBody: event,
-  });
-
-  return response.data;
+  return calendarProxyPost(
+    userId,
+    `/calendars/${encodeURIComponent(calendarId)}/events`,
+    event as unknown as Record<string, unknown>,
+  );
 }
 
 /**

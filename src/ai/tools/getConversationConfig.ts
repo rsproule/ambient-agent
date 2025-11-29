@@ -1,4 +1,4 @@
-import { Tool, tool } from "ai";
+import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getPrioritizationConfig } from "@/src/db/prioritization";
 import { DEFAULT_CONFIG } from "@/src/services/prioritization";
@@ -9,16 +9,18 @@ import { DEFAULT_CONFIG } from "@/src/services/prioritization";
  * Allows the agent to check current settings for the conversation
  * so they can summarize them for the user.
  */
-export const getConversationConfigTool: Tool = tool({
+export const getConversationConfigTool = tool({
   description:
     "Get the current prioritization configuration for the conversation. " +
     "Use this when users ask about their current settings, notification thresholds, or filtering preferences. " +
     "Returns minimumNotifyPrice, customValuePrompt, and isEnabled status.",
-  inputSchema: z.object({
-    conversationId: z
-      .string()
-      .describe("The conversation ID (phone number or group_id)"),
-  }),
+  inputSchema: zodSchema(
+    z.object({
+      conversationId: z
+        .string()
+        .describe("The conversation ID (phone number or group_id)"),
+    }),
+  ),
   execute: async ({ conversationId }) => {
     try {
       const config = await getPrioritizationConfig(conversationId);

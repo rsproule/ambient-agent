@@ -2,27 +2,26 @@
  * Next.js Middleware
  * 
  * Protects authenticated routes and handles redirects
- * Runs in Edge runtime for performance
  */
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { auth } from "@/src/lib/auth/config";
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect /connections routes
   if (pathname.startsWith("/connections")) {
-    // Check for NextAuth session cookie (JWT)
-    // NextAuth v5 uses cookies like "authjs.session-token" or "__Secure-authjs.session-token"
-    const sessionCookie = 
-      request.cookies.get("authjs.session-token") || 
-      request.cookies.get("__Secure-authjs.session-token");
+    // Use NextAuth's auth() function to check for valid session
+    const session = await auth();
 
-    if (!sessionCookie) {
+    if (!session?.user) {
       // Redirect to request page if not authenticated
       const url = request.nextUrl.clone();
       url.pathname = "/auth/request";
+      // Preserve the original URL as a callback
+      url.searchParams.set("callbackUrl", pathname);
       return NextResponse.redirect(url);
     }
   }

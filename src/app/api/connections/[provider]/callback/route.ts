@@ -126,6 +126,14 @@ export async function GET(
     const oauthAccessToken = credentials?.oauth_access_token as string | undefined;
     const oauthRefreshToken = credentials?.oauth_refresh_token as string | undefined;
 
+    console.log(`[Callback] OAuth credentials extracted:`, {
+      hasCredentials: !!credentials,
+      credentialKeys: credentials ? Object.keys(credentials) : [],
+      hasAccessToken: !!oauthAccessToken,
+      hasRefreshToken: !!oauthRefreshToken,
+      accessTokenLength: oauthAccessToken?.length,
+    });
+
     // Store the connection in the database
     await upsertConnection({
       userId,

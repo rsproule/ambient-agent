@@ -1,4 +1,10 @@
 import type { Agent } from "@/src/ai/agents/types";
+import {
+  createCalendarTools,
+  createGitHubTools,
+  createGmailTools,
+} from "@/src/ai/tools";
+import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
 import type {
   IMessageResponse,
@@ -30,26 +36,80 @@ export async function respondToMessage(
   // Build conversation context string using agent's context builder
   const contextString = agent.buildContext(context);
 
+  // Check if user has any connections before creating integration tools
+  // This reduces memory usage when no OAuth connections exist
+  const userHasConnections = await hasActiveConnections(context);
+
+  // Conditionally merge integration tools only if user has connections
+  const integrationTools = userHasConnections
+    ? {
+        // ...createGmailTools(context), // Commented out for now
+        // ...createGitHubTools(context), // Commented out for now
+        ...createCalendarTools(context),
+      }
+    : {};
+
+  const allTools = {
+    ...(agent.tools || {}),
+    ...integrationTools,
+  };
+
+  const totalToolCount = Object.keys(allTools).length;
   console.log(
     `[${agent.name}] Generating response for ${
       context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"
-    }${agent.tools ? ` (with ${Object.keys(agent.tools).length} tools)` : ""}`,
+    }${totalToolCount > 0 ? ` (with ${totalToolCount} tools)` : ""}`,
   );
+  if (context.sender) {
+    console.log(`[${agent.name}] Tools authenticated as: ${context.sender}`);
+  }
+  if (userHasConnections) {
+    console.log(
+      `[${agent.name}] User has active OAuth connections - integration tools enabled`,
+    );
+  }
+
+  // Debug: Log all tool names and check their schemas
+  console.log(`[${agent.name}] Tool list:`, Object.keys(allTools));
+  
+  // Validate each tool schema in detail
+  Object.entries(allTools).forEach(([name, tool], index) => {
+    const toolObj = tool as { inputSchema?: unknown };
+    if (!toolObj.inputSchema) {
+      console.error(`[${agent.name}] ❌ Tool ${index} (${name}) is missing 'inputSchema' field!`);
+    } else {
+      console.log(`[${agent.name}] ✅ Tool ${index} (${name}) has inputSchema`);
+    }
+  });
 
   // Combine context with agent's base instructions
   const systemPrompt = `${contextString}\n\n${agent.baseInstructions}`;
 
-  // Create ToolLoopAgent with structured output support
+  // Create ToolLoopAgent with structured output support and safeguards
   const loopAgent = new ToolLoopAgent({
     model: agent.model,
-    ...(agent.tools && Object.keys(agent.tools).length > 0
-      ? { tools: agent.tools }
-      : {}),
+    ...(Object.keys(allTools).length > 0 ? { tools: allTools } : {}),
     instructions: systemPrompt,
     output: Output.object({
       schema: agent.schema,
     }),
+    maxSteps: 10, // Prevent infinite tool calling loops
   });
+
+  // Debug: Try to inspect what's being sent to Anthropic
+  if (Object.keys(allTools).length > 0) {
+    try {
+      // Log the first tool's schema to see what's being generated
+      const firstToolName = Object.keys(allTools)[0];
+      const firstTool = allTools[firstToolName];
+      console.log(`[${agent.name}] Inspecting first tool (${firstToolName}):`, {
+        hasInputSchema: !!firstTool.inputSchema,
+        inputSchemaType: typeof firstTool.inputSchema,
+      });
+    } catch (e) {
+      console.error(`[${agent.name}] Failed to inspect tool schema:`, e);
+    }
+  }
 
   console.log(
     `[${agent.name}] Calling ToolLoopAgent.generate() with ${messages.length} messages...`,

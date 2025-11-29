@@ -6,6 +6,7 @@
  * - Read and update user context and preferences
  * - Generate magic links for account connections
  * - Create images
+ * - Access integrated services (Gmail, GitHub, Calendar) via OAuth
  */
 
 export { getConversationConfigTool } from "./getConversationConfig";
@@ -14,4 +15,12 @@ export { getUserContextTool } from "./getUserContext";
 export { updateUserContextTool } from "./updateUserContext";
 export { createImageTool } from "./createImage";
 export { generateConnectionLinkTool } from "./generateConnectionLink";
+
+// Integration tools (context-bound)
+export { createGmailTools } from "./gmail";
+export { createGitHubTools } from "./github";
+export { createCalendarTools } from "./calendar";
+
+// Helpers
+export { hasActiveConnections, getAuthenticatedUserId } from "./helpers";
 

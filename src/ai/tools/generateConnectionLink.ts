@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { generateMagicLinkUrl } from "@/src/db/magicLink";
 import { env } from "@/src/lib/config/env";
@@ -20,11 +20,13 @@ export const generateConnectionLinkTool = tool({
     "Use this when a user wants to connect or manage their integrations. " +
     "The link expires in 1 hour and is single-use. " +
     "Return this link in a friendly message to the user.",
-  inputSchema: z.object({
-    phoneNumber: z
-      .string()
-      .describe("The user's phone number (the person you're chatting with)"),
-  }),
+  inputSchema: zodSchema(
+    z.object({
+      phoneNumber: z
+        .string()
+        .describe("The user's phone number (the person you're chatting with)"),
+    }),
+  ),
   execute: async ({ phoneNumber }) => {
     try {
       // Get the base URL from environment or default to localhost
