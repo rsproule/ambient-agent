@@ -62,7 +62,9 @@ async function inboundMessageHandler(
     const validation = validateUserIdentifiers(webhook.group.participants);
     if (!validation.valid) {
       console.error(
-        `Invalid participants in group message: ${validation.invalid.join(", ")}`,
+        `Invalid participants in group message: ${validation.invalid.join(
+          ", ",
+        )}`,
       );
       throw new Error(
         `Invalid participant identifiers: ${validation.invalid.join(", ")}`,
@@ -87,7 +89,7 @@ async function inboundMessageHandler(
   }
 
   // Save the message to the database with attachments and group info
-  await saveUserMessage(
+  const savedMessage = await saveUserMessage(
     conversationId,
     webhook.text || "",
     webhook.recipient || "",
@@ -98,12 +100,13 @@ async function inboundMessageHandler(
     webhook.group?.participants || [],
   );
 
-  // Trigger debounced response task
+  // Trigger debounced response task with the message timestamp
+  // Use the DB timestamp to ensure accuracy
   await debouncedResponse.trigger({
     conversationId,
     recipient: webhook.recipient,
     group: webhook.group?.group_id,
-    timestampWhenTriggered: new Date().toISOString(),
+    timestampWhenTriggered: savedMessage.createdAt.toISOString(),
   });
 
   return {

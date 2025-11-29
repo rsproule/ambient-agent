@@ -1,5 +1,5 @@
 import { updateUserContext as updateUserContextDb } from "@/src/db/user";
-import { tool } from "ai";
+import { tool, zodSchema } from "ai";
 import { z } from "zod";
 
 /**
@@ -16,26 +16,28 @@ export const updateUserContextTool = tool({
     "Use this to save information the user shares about themselves, their preferences, " +
     "or any custom settings they want to configure. By default, this merges with existing " +
     "data. Set replace=true to completely overwrite existing context.",
-  inputSchema: z.object({
-    phoneNumber: z
-      .string()
-      .describe("The user's phone number (E.164 format or email)"),
-    context: z
-      .object({})
-      .passthrough()
-      .describe(
-        "The context data to store as a JSON object. Can include any properties like " +
-          "preferences, notes, custom fields, etc. Examples: {name: 'John', timezone: 'America/New_York', " +
-          "preferences: {notificationStyle: 'minimal'}}",
-      ),
-    replace: z
-      .boolean()
-      .optional()
-      .default(false)
-      .describe(
-        "If true, completely replaces existing context. If false (default), merges with existing context.",
-      ),
-  }),
+  inputSchema: zodSchema(
+    z.object({
+      phoneNumber: z
+        .string()
+        .describe("The user's phone number (E.164 format or email)"),
+      context: z
+        .object({})
+        .passthrough()
+        .describe(
+          "The context data to store as a JSON object. Can include any properties like " +
+            "preferences, notes, custom fields, etc. Examples: {name: 'John', timezone: 'America/New_York', " +
+            "preferences: {notificationStyle: 'minimal'}}",
+        ),
+      replace: z
+        .boolean()
+        .optional()
+        .default(false)
+        .describe(
+          "If true, completely replaces existing context. If false (default), merges with existing context.",
+        ),
+    }),
+  ),
   execute: async ({ phoneNumber, context, replace }) => {
     try {
       const user = await updateUserContextDb(phoneNumber, context, replace);

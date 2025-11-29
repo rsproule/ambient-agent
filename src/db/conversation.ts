@@ -17,6 +17,7 @@ export interface ConversationContext {
   groupName?: string;
   participants: string[];
   summary?: string; // Optional: compressed context summary for future use
+  sender?: string; // Phone number of the user who sent the last message (for tool auth)
   // Future: can add more context fields here (preferences, history, etc.)
 }
 
@@ -235,6 +236,13 @@ export async function getConversationMessages(
       return true;
     });
 
+  // Get the sender of the last user message (for tool authentication)
+  // This is critical for group messages where tools should auth as the sender
+  const lastUserMessage = [...messages]
+    .reverse()
+    .find((msg) => msg.role === "user" && msg.sender);
+  const sender = lastUserMessage?.sender ?? undefined;
+
   return {
     messages: formattedMessages,
     context: {
@@ -243,6 +251,7 @@ export async function getConversationMessages(
       groupName: conversation.groupName ?? undefined,
       participants: conversation.participants,
       summary: conversation.summary ?? undefined,
+      sender,
     },
   };
 }

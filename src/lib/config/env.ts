@@ -22,6 +22,20 @@ const envSchema = z.object({
     .string()
     .min(1, "LOOP_WEBHOOK_SECRET_KEY is required"),
 
+  // Pipedream configuration
+  PIPEDREAM_CLIENT_ID: z.string().optional(),
+  PIPEDREAM_CLIENT_SECRET: z.string().optional(),
+  PIPEDREAM_PROJECT_ID: z.string().optional(),
+  PIPEDREAM_PROJECT_ENVIRONMENT: z.string().optional().default("production"),
+  PIPEDREAM_OAUTH_APP_ID: z.string().optional(),
+
+  // NextAuth (using magic link authentication)
+  NEXTAUTH_URL: z.string().url().optional(),
+  NEXTAUTH_SECRET: z.string().min(1, "NEXTAUTH_SECRET is required"),
+
+  // Application URL
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+
   // Node environment
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -88,6 +102,33 @@ export const loopConfig = {
   },
   get webhookSecretKey() {
     return env.LOOP_WEBHOOK_SECRET_KEY;
+  },
+};
+
+export const pipedreamConfig = {
+  get clientId() {
+    return env.PIPEDREAM_CLIENT_ID;
+  },
+  get clientSecret() {
+    return env.PIPEDREAM_CLIENT_SECRET;
+  },
+  get projectId() {
+    return env.PIPEDREAM_PROJECT_ID;
+  },
+  get projectEnvironment() {
+    return env.PIPEDREAM_PROJECT_ENVIRONMENT;
+  },
+  get oauthAppId() {
+    return env.PIPEDREAM_OAUTH_APP_ID;
+  },
+};
+
+export const nextAuthConfig = {
+  get url() {
+    return env.NEXTAUTH_URL;
+  },
+  get secret() {
+    return env.NEXTAUTH_SECRET;
   },
 };
 

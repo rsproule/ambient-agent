@@ -1,4 +1,4 @@
-import { tool } from "ai";
+import { tool, zodSchema } from "ai";
 import { z } from "zod";
 import { getUserContext as getUserContextDb } from "@/src/db/user";
 
@@ -15,11 +15,13 @@ export const getUserContextTool = tool({
     "Get the stored context and preferences for a specific user by their phone number. " +
     "Use this to retrieve information the user has shared about themselves, their preferences, " +
     "or any custom settings they've configured. Returns the user's metadata as a JSON object.",
-  inputSchema: z.object({
-    phoneNumber: z
-      .string()
-      .describe("The user's phone number (E.164 format or email)"),
-  }),
+  inputSchema: zodSchema(
+    z.object({
+      phoneNumber: z
+        .string()
+        .describe("The user's phone number (E.164 format or email)"),
+    }),
+  ),
   execute: async ({ phoneNumber }) => {
     try {
       const context = await getUserContextDb(phoneNumber);

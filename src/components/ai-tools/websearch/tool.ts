@@ -1,18 +1,18 @@
 import { perplexity } from "@ai-sdk/perplexity"
-import { tool, generateObject, UIToolInvocation } from "ai"
+import { tool, generateObject, UIToolInvocation, zodSchema } from "ai"
 import { z } from "zod"
 
 import { WebSearchSchema, WebSearchResult } from "./schema"
 
 export const webSearchPerplexityTool = tool({
-  name: "websearch-perplexity",
   description:
     "Search the web using Perplexity Sonar via Vercel AI SDK. Requires Perplexity API key. See Vercel docs.",
-  inputSchema: z.object({
-    query: z.string().min(1),
-    limit: z.number().min(1).max(20).default(5),
-  }),
-  outputSchema: WebSearchSchema,
+  inputSchema: zodSchema(
+    z.object({
+      query: z.string().min(1).describe("The search query"),
+      limit: z.number().min(1).max(20).default(5).describe("Number of results (default: 5, max: 20)"),
+    }),
+  ),
   execute: async ({ query, limit }) => {
     // Use Sonar (or Sonar Pro) for search-grounded results
 

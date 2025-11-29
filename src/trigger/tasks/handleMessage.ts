@@ -23,6 +23,9 @@ type HandleMessageResponsePayload = {
 
 export const handleMessageResponse = task({
   id: "handle-message-response",
+  machine: {
+    preset: "small-1x", // 0.5 vCPU, 0.5 GB RAM
+  },
   run: async (payload: HandleMessageResponsePayload) => {
     try {
       // Execute each action in sequence
