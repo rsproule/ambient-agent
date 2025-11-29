@@ -65,16 +65,16 @@ export async function GET(
       
       if (allAccounts.length > 0) {
         allAccounts.forEach((acc, idx) => {
-          console.log(`[Callback] Account ${idx}:`, {
-            id: acc.id,
-            name: acc.name,
-            externalId: acc.externalId,
-            appId: acc.app?.id,
-            appName: acc.app?.name,
-            appNameSlug: acc.app?.name_slug,
-            healthy: acc.healthy,
-            createdAt: acc.createdAt,
-          });
+        console.log(`[Callback] Account ${idx}:`, {
+          id: acc.id,
+          name: acc.name,
+          externalId: acc.externalId,
+          appId: acc.app?.id,
+          appName: acc.app?.name,
+          appNameSlug: acc.app?.nameSlug,
+          healthy: acc.healthy,
+          createdAt: acc.createdAt,
+        });
         });
       }
 
@@ -84,7 +84,7 @@ export async function GET(
         const normalize = (str?: string) => str?.toLowerCase().replace(/\s+/g, '_');
         
         const appName = normalize(acc.app?.name);
-        const appNameSlug = normalize(acc.app?.name_slug);
+        const appNameSlug = normalize(acc.app?.nameSlug);
         const appId = normalize(acc.app?.id);
         const targetApp = normalize(providerConfig.app);
         

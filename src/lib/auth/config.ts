@@ -2,14 +2,11 @@
  * NextAuth.js Configuration with Magic Link Authentication
  */
 
+import { validateMagicLinkToken } from "@/src/db/magicLink";
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { prisma } from "@/src/db/client";
-import { validateMagicLinkToken } from "@/src/db/magicLink";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  adapter: PrismaAdapter(prisma),
   providers: [
     Credentials({
       id: "magic-link",
@@ -24,7 +21,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         // Validate the magic link token
         const result = await validateMagicLinkToken(credentials.token);
-        
+
         if (!result.valid || !result.user) {
           return null;
         }
@@ -45,7 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Add custom fields to JWT token on sign in
       if (user) {
         token.id = user.id;
-        token.phoneNumber = (user as any).phoneNumber;
+        token.phoneNumber = user.phoneNumber;
       }
       return token;
     },
@@ -53,7 +50,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Add custom fields to session
       if (session.user) {
         session.user.id = token.id as string;
-        (session.user as any).phoneNumber = token.phoneNumber;
+        session.user.phoneNumber = token.phoneNumber as string | undefined;
       }
       return session;
     },
@@ -66,4 +63,3 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     maxAge: 60 * 60, // 1 hour
   },
 });
-
