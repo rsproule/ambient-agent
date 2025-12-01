@@ -48,7 +48,7 @@ export async function queueResearchJob(params: {
 
 /**
  * Create a research job for a new OAuth connection
- * Analyzes the connected provider and optionally runs web search (first connection)
+ * Analyzes the connected provider and runs deep person research on first connection
  */
 export async function queueOAuthResearchJob(params: {
   userId: string;
@@ -58,30 +58,20 @@ export async function queueOAuthResearchJob(params: {
   userName?: string;
 }): Promise<{ jobId: string; handle: unknown }> {
   const tasks: ResearchTask[] = [
+    // First: analyze the connected provider (extracts company, role, etc.)
     { type: "analyze_provider", provider: params.provider },
   ];
 
-  // On first connection, also run web search if we have user info
+  // On first connection, run deep person research
+  // This runs AFTER analyze_provider, so it can use extracted context
   if (params.isFirstConnection) {
-    const queries: string[] = [];
-    if (params.userName) {
-      queries.push(params.userName);
-    }
-    if (params.userEmail) {
-      // Extract domain for company research
-      const domain = params.userEmail.split("@")[1];
-      if (
-        domain &&
-        !["gmail.com", "yahoo.com", "hotmail.com", "outlook.com"].includes(
-          domain,
-        )
-      ) {
-        queries.push(domain);
-      }
-    }
-    if (queries.length > 0) {
-      tasks.push({ type: "web_search", queries });
-    }
+    tasks.push({
+      type: "deep_person_research",
+      name: params.userName,
+      email: params.userEmail,
+      // company/role/location will be pulled from UserContext
+      // (populated by analyze_provider task that runs first)
+    });
   }
 
   return queueResearchJob({

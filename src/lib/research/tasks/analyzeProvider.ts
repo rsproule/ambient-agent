@@ -66,8 +66,8 @@ async function analyzeGmail(userId: string): Promise<{
   summary?: string;
   error?: string;
 }> {
-  // Get recent messages
-  const messagesResponse = await listGmailMessages(userId, { maxResults: 50 });
+  // Get recent messages - fetch more for better analysis
+  const messagesResponse = await listGmailMessages(userId, { maxResults: 200 });
   const messageIds =
     messagesResponse.messages?.map((m) => m.id).filter(Boolean) || [];
 
@@ -75,11 +75,24 @@ async function analyzeGmail(userId: string): Promise<{
     return { success: true, documentsCreated: 0, summary: "No emails found" };
   }
 
-  // Fetch message details (limit to avoid rate limits)
-  const messagesToFetch = messageIds.slice(0, 20);
-  const messages = await Promise.all(
-    messagesToFetch.map((id) => getGmailMessage(userId, id!)),
-  );
+  // Fetch message details - get more for richer context
+  // Process in batches to avoid rate limits
+  const messagesToFetch = messageIds.slice(0, 100);
+  const batchSize = 20;
+  const messages = [];
+
+  for (let i = 0; i < messagesToFetch.length; i += batchSize) {
+    const batch = messagesToFetch.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map((id) => getGmailMessage(userId, id!)),
+    );
+    messages.push(...batchResults);
+
+    // Small delay between batches to be nice to the API
+    if (i + batchSize < messagesToFetch.length) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
 
   // Extract senders and subjects for analysis
   const emailData = messages.map((msg) => {

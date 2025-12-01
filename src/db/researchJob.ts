@@ -5,7 +5,11 @@ import type { Prisma, ResearchJobStatus } from "@/src/generated/prisma";
 // Types
 // ============================================
 
-export type ResearchTaskType = "analyze_provider" | "web_search" | "store_fact";
+export type ResearchTaskType =
+  | "analyze_provider"
+  | "web_search"
+  | "store_fact"
+  | "deep_person_research";
 
 export interface AnalyzeProviderTask {
   type: "analyze_provider";
@@ -23,7 +27,26 @@ export interface StoreFactTask {
   invalidates?: string[]; // Queries to mark as stale
 }
 
-export type ResearchTask = AnalyzeProviderTask | WebSearchTask | StoreFactTask;
+/**
+ * Deep person research task
+ * Uses context already extracted from providers + any provided hints
+ * to run comprehensive web research on the user
+ */
+export interface DeepPersonResearchTask {
+  type: "deep_person_research";
+  // Optional hints to seed the research (will also pull from UserContext)
+  name?: string;
+  email?: string;
+  company?: string;
+  role?: string;
+  location?: string;
+}
+
+export type ResearchTask =
+  | AnalyzeProviderTask
+  | WebSearchTask
+  | StoreFactTask
+  | DeepPersonResearchTask;
 
 export interface PostProcessConfig {
   notify: boolean;

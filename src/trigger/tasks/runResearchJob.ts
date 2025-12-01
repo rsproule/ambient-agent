@@ -1,11 +1,13 @@
 import {
   getResearchJob,
   updateResearchJobStatus,
+  type DeepPersonResearchTask,
   type ResearchTask,
 } from "@/src/db/researchJob";
 import { getUserContext, updateUserContext } from "@/src/db/userContext";
 import {
   analyzeProvider,
+  deepResearchPerson,
   runWebSearch,
   storeFact,
 } from "@/src/lib/research/tasks";
@@ -148,9 +150,77 @@ async function executeTask(
     case "store_fact":
       return storeFact(userId, task.content, task.invalidates);
 
+    case "deep_person_research":
+      return executeDeepPersonResearch(userId, task);
+
     default:
       throw new Error(`Unknown task type: ${(task as { type: string }).type}`);
   }
+}
+
+/**
+ * Execute deep person research
+ * Pulls context from UserContext and combines with task hints
+ */
+async function executeDeepPersonResearch(
+  userId: string,
+  task: DeepPersonResearchTask,
+): Promise<unknown> {
+  // Get existing user context to enrich the research
+  const userContext = await getUserContext(userId);
+
+  // Extract name from hints or existing context
+  let name = task.name;
+  if (!name && userContext?.professional) {
+    const prof = userContext.professional as Record<string, unknown>;
+    // Try to get name from various sources
+    if (prof.github) {
+      const gh = prof.github as Record<string, string>;
+      name = gh.name || gh.username;
+    }
+    if (prof.web) {
+      const web = prof.web as Record<string, string>;
+      name = name || web.name;
+    }
+  }
+
+  if (!name) {
+    console.log("[DeepPersonResearch] No name available, skipping");
+    return { success: false, error: "No name available for research" };
+  }
+
+  // Extract context from hints and existing data
+  let company = task.company;
+  let role = task.role;
+  let location = task.location;
+
+  if (userContext?.professional) {
+    const prof = userContext.professional as Record<string, unknown>;
+    if (prof.github) {
+      const gh = prof.github as Record<string, string>;
+      company = company || gh.company;
+      role = role || gh.role;
+    }
+    if (prof.web) {
+      const web = prof.web as Record<string, string>;
+      company = company || web.company;
+      role = role || web.role;
+      location = location || web.location;
+    }
+  }
+
+  console.log(`[DeepPersonResearch] Researching ${name}`, {
+    company,
+    role,
+    location,
+  });
+
+  return deepResearchPerson(userId, name, {
+    email: task.email,
+    company,
+    role,
+    location,
+  });
 }
 
 /**
