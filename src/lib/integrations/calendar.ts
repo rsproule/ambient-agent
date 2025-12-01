@@ -13,18 +13,7 @@ import type { calendar_v3 } from "googleapis";
  * Get connection info for making proxied Calendar API calls
  */
 async function getCalendarConnection(userId: string) {
-  console.log(
-    "[getCalendarConnection] Looking up connection for userId:",
-    userId,
-  );
-
   const connection = await getConnection(userId, "google_calendar");
-
-  console.log("[getCalendarConnection] Connection lookup result:", {
-    found: !!connection,
-    status: connection?.status,
-    pipedreamAccountId: connection?.pipedreamAccountId,
-  });
 
   if (!connection || connection.status !== "connected") {
     throw new Error("Google Calendar not connected");
@@ -52,32 +41,14 @@ async function calendarProxyGet<T>(
 
   const url = `https://www.googleapis.com/calendar/v3${path}`;
 
-  console.log("[calendarProxyGet] Making request:", { url, params, accountId });
+  const response = await pipedream.proxy.get({
+    url,
+    accountId,
+    externalUserId,
+    params,
+  });
 
-  try {
-    const response = await pipedream.proxy.get({
-      url,
-      accountId,
-      externalUserId,
-      params,
-    });
-
-    console.log("[calendarProxyGet] Response type:", typeof response);
-    console.log(
-      "[calendarProxyGet] Response keys:",
-      response && typeof response === "object" ? Object.keys(response) : "N/A",
-    );
-    console.log(
-      "[calendarProxyGet] Full response:",
-      JSON.stringify(response, null, 2),
-    );
-
-    // The response might be the body directly, not wrapped
-    return response as T;
-  } catch (error) {
-    console.error("[calendarProxyGet] Error:", error);
-    throw error;
-  }
+  return response as T;
 }
 
 /**
@@ -93,38 +64,15 @@ async function calendarProxyPost<T>(
 
   const url = `https://www.googleapis.com/calendar/v3${path}`;
 
-  console.log("[calendarProxyPost] Making request:", {
+  const response = await pipedream.proxy.post({
     url,
-    body,
-    params,
     accountId,
+    externalUserId,
+    body: body as Record<string, unknown>,
+    params,
   });
 
-  try {
-    const response = await pipedream.proxy.post({
-      url,
-      accountId,
-      externalUserId,
-      body: body as Record<string, unknown>,
-      params,
-    });
-
-    console.log("[calendarProxyPost] Response type:", typeof response);
-    console.log(
-      "[calendarProxyPost] Response keys:",
-      response && typeof response === "object" ? Object.keys(response) : "N/A",
-    );
-    console.log(
-      "[calendarProxyPost] Full response:",
-      JSON.stringify(response, null, 2),
-    );
-
-    // The response might be the body directly, not wrapped
-    return response as T;
-  } catch (error) {
-    console.error("[calendarProxyPost] Error:", error);
-    throw error;
-  }
+  return response as T;
 }
 
 /**

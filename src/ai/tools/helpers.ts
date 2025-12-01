@@ -2,9 +2,9 @@
  * Helper utilities for integration tools
  */
 
+import { prisma } from "@/src/db/client";
 import type { ConversationContext } from "@/src/db/conversation";
 import { getUserByPhoneNumber } from "@/src/db/user";
-import { prisma } from "@/src/db/client";
 
 /**
  * Get the authenticated user ID from conversation context
@@ -14,28 +14,13 @@ export async function getAuthenticatedUserId(
   context: ConversationContext,
 ): Promise<string | null> {
   // For group messages, authenticate as the sender
-  const phoneNumber = context.isGroup
-    ? context.sender
-    : context.conversationId;
-
-  console.log('[getAuthenticatedUserId] Looking up user:', {
-    phoneNumber,
-    isGroup: context.isGroup,
-    sender: context.sender,
-    conversationId: context.conversationId,
-  });
+  const phoneNumber = context.isGroup ? context.sender : context.conversationId;
 
   if (!phoneNumber) {
-    console.log('[getAuthenticatedUserId] No phone number available');
     return null;
   }
 
   const user = await getUserByPhoneNumber(phoneNumber);
-  console.log('[getAuthenticatedUserId] User lookup result:', {
-    found: !!user,
-    userId: user?.id,
-  });
-  
   return user?.id ?? null;
 }
 
@@ -61,4 +46,3 @@ export async function hasActiveConnections(
 
   return connectionCount > 0;
 }
-
