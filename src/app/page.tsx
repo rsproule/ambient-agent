@@ -1,11 +1,12 @@
+import { LinkIcon, MessageSquare } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-950 pt-16">
+    <div className="flex min-h-dvh items-center justify-center bg-background pt-16">
       <main className="flex flex-col items-center gap-8 p-8 text-center max-w-md">
-        <div className="relative w-48 h-48 rounded-full overflow-hidden shadow-2xl ring-4 ring-white dark:ring-zinc-800">
+        <div className="relative w-48 h-48 rounded-full overflow-hidden shadow-2xl">
           <Image
             src="/whiskerspfp.jpg"
             alt="Whiskers"
@@ -16,51 +17,27 @@ export default function Home() {
         </div>
 
         <div className="space-y-4">
-          <h1 className="text-4xl font-bold text-zinc-900 dark:text-zinc-50">
-            Mr. Whiskers
-          </h1>
-          <p className="text-xl font-medium text-zinc-700 dark:text-zinc-300">
+          <h1 className="text-4xl font-bold text-foreground">Mr. Whiskers</h1>
+          <p className="text-xl font-medium text-foreground/80">
             Purrsonal Assistant
-          </p>
-          <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Connect your accounts and unlock powerful integrations.
           </p>
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <Link
             href="/connections"
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md shadow-md transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-md shadow-md transition-colors"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path
-                fillRule="evenodd"
-                d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                clipRule="evenodd"
-              />
-            </svg>
-            Manage My Connections
+            <LinkIcon className="h-5 w-5" />
+            Manage Connections
           </Link>
 
           <a
             href="sms:+17243216167&body=I need my connection link"
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-zinc-200 hover:bg-zinc-300 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-semibold rounded-md shadow-md transition-colors"
+            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold rounded-md shadow-md transition-colors"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-            </svg>
-            Chat with Mr. Whiskers
+            <MessageSquare className="h-5 w-5" />
+            Text Mr. Whiskers
           </a>
         </div>
       </main>
