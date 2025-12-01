@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Proactive scheduler triggered manually",
       taskId: handle.id,
-      userIds: userIds || "all opted-in users",
+      userIds: userIds || "*",
     });
   } catch (error) {
     console.error("[API] Error triggering proactive scheduler:", error);
