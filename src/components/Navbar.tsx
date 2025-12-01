@@ -4,7 +4,7 @@ import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
 import { useState } from "react";
-import { ChevronDown, Zap, LogOut } from "lucide-react";
+import { ChevronDown, Zap, LogOut, Clock } from "lucide-react";
 
 export function Navbar() {
   const { data: session, status } = useSession();
@@ -98,6 +98,17 @@ export function Navbar() {
                         </div>
                       </Link>
                       
+                      <Link
+                        href="/scheduled-jobs"
+                        className="block px-4 py-2 text-sm text-popover-foreground hover:bg-accent"
+                        onClick={() => setShowDropdown(false)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4" />
+                          Scheduled Jobs
+                        </div>
+                      </Link>
+                      
                       <hr className="my-1 border-border" />
                       
                       <button
@@ -120,7 +131,7 @@ export function Navbar() {
           ) : (
             <Link
               href="/auth/request"
-              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-primary-foreground bg-primary hover:bg-primary/90 rounded-lg transition-all active:scale-95"
             >
               Sign In
             </Link>
