@@ -1,13 +1,18 @@
-import { PrismaNeonHttp } from "@prisma/adapter-neon";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
 import { PrismaClient } from "../generated/prisma";
 
-// Create Prisma client with Neon HTTP adapter (better for serverless)
-// Uses HTTP instead of WebSocket which works in all environments
+// Create Prisma client with Postgres adapter (supports transactions)
+// Uses connection pooling for better performance in serverless environments
 const createPrismaClient = () => {
-  const adapter = new PrismaNeonHttp(process.env.DATABASE_URL || "", {
-    fullResults: false,
-    arrayMode: false,
+  // Create a connection pool
+  const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
   });
+
+  // Create Prisma adapter with the pool
+  const adapter = new PrismaPg(pool);
+
   return new PrismaClient({
     adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
