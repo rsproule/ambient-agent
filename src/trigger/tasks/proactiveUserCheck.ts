@@ -101,12 +101,20 @@ async function buildHookContext(userId: string): Promise<HookContext | null> {
 
 /**
  * Check if a hook is due to run based on its schedule
+ * Returns false if hook is disabled (cooldown = 0)
  */
 function isHookDue(
   hookName: HookName,
   lastRunTimes: HookLastRunTimes,
   schedules: HookScheduleConfig,
 ): boolean {
+  const cooldownMinutes = schedules[hookName];
+
+  // Cooldown of 0 means disabled
+  if (cooldownMinutes === 0) {
+    return false;
+  }
+
   const lastRunStr = lastRunTimes[hookName];
 
   // If never run, it's due
@@ -115,7 +123,6 @@ function isHookDue(
   }
 
   const lastRun = new Date(lastRunStr);
-  const cooldownMinutes = schedules[hookName];
   const cooldownMs = cooldownMinutes * 60 * 1000;
   const timeSinceLastRun = Date.now() - lastRun.getTime();
 

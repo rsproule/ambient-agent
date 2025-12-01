@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from "next/server";
  * POST /api/trigger-process-messages
  *
  * Manually trigger message processing from the queue.
- * Useful for immediate processing when new messages are enqueued.
+ * Protected by CRON_SECRET.
  *
  * Body (optional):
  * {
@@ -15,6 +15,15 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify authorization
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      console.warn("[API] Unauthorized POST request to trigger-process-messages");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const batchSize = body.batchSize || 10;
 
