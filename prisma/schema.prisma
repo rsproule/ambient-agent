@@ -45,15 +45,60 @@ model Message {
 }
 
 model User {
-  id          String   @id @default(cuid())
-  phoneNumber String?  @unique // Optional: Phone number for DMs (1-1 mapping). Null for web-only users (merchants)
-  name        String? // Optional display name
-  email       String? // Optional email
-  metadata    Json? // Optional additional user metadata
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String       @id @default(cuid())
+  phoneNumber   String?      @unique // Optional: Phone number for DMs (1-1 mapping). Null for web-only users (merchants)
+  name          String? // Optional display name
+  email         String?      @unique // Optional email
+  emailVerified DateTime? // For NextAuth
+  image         String? // Profile image URL
+  metadata      Json? // Optional additional user metadata
+  connections   Connection[] // User's connected accounts
+  accounts      Account[] // OAuth accounts
+  sessions      Session[] // User sessions
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([phoneNumber])
+  @@index([email])
+}
+
+// NextAuth models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
 enum MessageStatus {
@@ -104,4 +149,42 @@ model MessageEvaluation {
 
   @@index([queuedMessageId])
   @@index([conversationId, evaluatedAt])
+}
+
+enum ConnectionProvider {
+  google_gmail
+  google_calendar
+  github
+}
+
+enum ConnectionStatus {
+  connected
+  disconnected
+  error
+}
+
+model Connection {
+  id           String             @id @default(cuid())
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     ConnectionProvider
+  status       ConnectionStatus   @default(disconnected)
+  accountEmail String? // Email/username of the connected account
+  accountId    String? // Provider's account ID
+
+  // Pipedream specific fields
+  pipedreamAccountId String? // Pipedream's connected account ID
+  accessToken        String?   @db.Text // Encrypted access token
+  refreshToken       String?   @db.Text // Encrypted refresh token
+  expiresAt          DateTime? // Token expiration
+
+  scopes       String[] // Granted permissions
+  metadata     Json? // Additional provider-specific data
+  lastSyncedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
+  @@index([status])
 }

@@ -1,9 +1,8 @@
-import { respondToMessage } from "@/src/ai/respondToMessage";
 import { mrWhiskersAgent } from "@/src/ai/agents/mrWhiskers";
+import { respondToMessage } from "@/src/ai/respondToMessage";
 import {
   acquireResponseLock,
   getConversationMessages,
-  hasNewMessagesSince,
   releaseResponseLock,
 } from "@/src/db/conversation";
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -18,30 +17,16 @@ type DebouncedResponsePayload = {
 
 export const debouncedResponse = task({
   id: "debounced-response",
+  machine: {
+    preset: "medium-1x", // 1 vCPU, 2 GB RAM (increased for AI SDK + Anthropic)
+  },
   run: async (payload: DebouncedResponsePayload, { ctx }) => {
-    const triggerTime = new Date(payload.timestampWhenTriggered);
     const taskId = ctx.run.id; // Unique ID for this task run
 
-    // Wait 1 second (debounce period)
+    // Wait 1 second (debounce period) to batch rapid messages
     await wait.for({ seconds: 1 });
 
-    // Check if any new messages arrived during the debounce period
-    const hasNewMessages = await hasNewMessagesSince(
-      payload.conversationId,
-      triggerTime,
-    );
-
-    if (hasNewMessages) {
-      console.log(
-        `New messages detected for conversation ${payload.conversationId}, skipping response`,
-      );
-      return {
-        skipped: true,
-        reason: "new_messages_received",
-      };
-    }
-
-    // Try to acquire the response lock
+    // Try to acquire the response lock (this prevents duplicate responses)
     const lockAcquired = await acquireResponseLock(
       payload.conversationId,
       taskId,
@@ -76,7 +61,10 @@ export const debouncedResponse = task({
     );
 
     // Get conversation history and context (last 100 messages)
-    const { messages, context } = await getConversationMessages(payload.conversationId, 100);
+    const { messages, context } = await getConversationMessages(
+      payload.conversationId,
+      100,
+    );
 
     if (messages.length === 0) {
       console.log(
@@ -90,7 +78,9 @@ export const debouncedResponse = task({
 
     // Log conversation type and context
     console.log(
-      `Conversation ${payload.conversationId} is a ${context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"}`,
+      `Conversation ${payload.conversationId} is a ${
+        context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"
+      }`,
     );
     if (context.summary) {
       console.log(`Conversation has summary: ${context.summary}`);
@@ -98,7 +88,11 @@ export const debouncedResponse = task({
 
     // Generate AI response with full conversation context
     try {
-      const actions = await respondToMessage(mrWhiskersAgent, messages, context);
+      const actions = await respondToMessage(
+        mrWhiskersAgent,
+        messages,
+        context,
+      );
 
       // If no actions, we're done (e.g., group chat where no response is needed)
       if (actions.length === 0) {
