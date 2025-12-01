@@ -3,6 +3,7 @@
  * POST /api/connections/{provider}/connect
  */
 
+import { auth } from "@/src/lib/auth/config";
 import { pipedreamConfig } from "@/src/lib/config/env";
 import { createConnectToken } from "@/src/lib/pipedream/client";
 import { getProviderConfig } from "@/src/lib/pipedream/providers";
@@ -16,6 +17,12 @@ export async function POST(
   { params }: { params: Promise<{ provider: string }> },
 ) {
   try {
+    // Verify user is authenticated
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { provider } = await params;
     const { userId } = await request.json();
 
@@ -23,6 +30,14 @@ export async function POST(
       return NextResponse.json(
         { error: "userId is required" },
         { status: 400 },
+      );
+    }
+
+    // Verify that the authenticated user is connecting their own account
+    if (session.user.id !== userId) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot connect another user's account" },
+        { status: 403 },
       );
     }
 

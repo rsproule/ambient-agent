@@ -134,7 +134,20 @@ export async function GET(
       id: account.id,
       name: account.name,
       healthy: account.healthy,
+      externalId: account.externalId,
     });
+
+    // SECURITY: Verify the Pipedream account's externalId matches the userId
+    // This prevents an attacker from manipulating the callback URL to connect
+    // an OAuth account to a different user
+    if (account.externalId !== userId) {
+      console.error(
+        `[Callback] Security violation: externalId (${account.externalId}) does not match userId (${userId})`,
+      );
+      return NextResponse.redirect(
+        new URL(`/connections/${userId}?error=user_mismatch`, request.url),
+      );
+    }
 
     // Extract OAuth credentials from the credentials object
     const credentials = account.credentials as

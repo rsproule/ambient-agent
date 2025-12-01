@@ -1,9 +1,13 @@
 /**
- * Example API endpoint for Gmail integration
- * GET /api/integrations/gmail?userId={userId}&action={list|search}
+ * API endpoint for Gmail integration
+ * GET /api/integrations/gmail?action={list|search|get}
+ * 
+ * Note: userId is taken from authenticated session, not query parameters
+ * This prevents unauthorized access to other users' Gmail data
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/src/lib/auth/config";
 import {
   listGmailMessages,
   searchGmailMessages,
@@ -12,16 +16,20 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const action = searchParams.get("action") || "list";
-
-    if (!userId) {
+    // Verify user is authenticated
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
+
+    // Get userId from authenticated session (not from query parameters)
+    const userId = session.user.id;
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action") || "list";
 
     switch (action) {
       case "list": {
@@ -71,4 +79,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

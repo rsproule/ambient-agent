@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getConnection, updateConnection } from "@/src/db/connection";
 import { deleteAccount } from "@/src/lib/pipedream/client";
+import { auth } from "@/src/lib/auth/config";
 import type { ConnectionProvider } from "@/src/generated/prisma";
 
 export async function POST(
@@ -13,6 +14,15 @@ export async function POST(
   { params }: { params: Promise<{ provider: string }> }
 ) {
   try {
+    // Verify user is authenticated
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
     const { provider } = await params;
     const { userId } = await request.json();
 
@@ -20,6 +30,14 @@ export async function POST(
       return NextResponse.json(
         { error: "userId is required" },
         { status: 400 }
+      );
+    }
+
+    // Verify that the authenticated user is disconnecting their own connection
+    if (session.user.id !== userId) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot disconnect another user's connection" },
+        { status: 403 }
       );
     }
 
@@ -60,4 +78,3 @@ export async function POST(
     );
   }
 }
-

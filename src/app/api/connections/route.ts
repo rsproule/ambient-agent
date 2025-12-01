@@ -1,22 +1,25 @@
 /**
  * API endpoint for managing user connections
- * GET /api/connections?userId={userId} - List all connections for a user
+ * GET /api/connections - List all connections for authenticated user
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getUserConnections } from "@/src/db/connection";
+import { auth } from "@/src/lib/auth/config";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-
-    if (!userId) {
+    // Check authentication
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
+
+    // Use userId from authenticated session (not from query parameters)
+    const userId = session.user.id;
 
     const connections = await getUserConnections(userId);
 
@@ -29,4 +32,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -1,9 +1,13 @@
 /**
- * Example API endpoint for Google Calendar integration
- * GET /api/integrations/calendar?userId={userId}&action={list|today|week}
+ * API endpoint for Google Calendar integration
+ * GET /api/integrations/calendar?action={list|today|week|get}
+ * 
+ * Note: userId is taken from authenticated session, not query parameters
+ * This prevents unauthorized access to other users' calendar data
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/src/lib/auth/config";
 import {
   listCalendarEvents,
   getTodaysEvents,
@@ -13,16 +17,20 @@ import {
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const action = searchParams.get("action") || "list";
-
-    if (!userId) {
+    // Verify user is authenticated
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 }
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
+
+    // Get userId from authenticated session (not from query parameters)
+    const userId = session.user.id;
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action") || "list";
 
     switch (action) {
       case "list": {
@@ -79,4 +87,3 @@ export async function GET(request: NextRequest) {
     );
   }
 }
-

@@ -31,9 +31,15 @@ export async function GET(request: NextRequest) {
       redirect: false,
     });
 
-    // If sign in was successful, we should have a session
-    // Redirect to connections page - we'll use a generic /connections route
-    // that will redirect to the user-specific page
+    // Check if sign in was successful
+    if (!result || result.error) {
+      console.error("Sign in failed:", result?.error);
+      return NextResponse.redirect(
+        new URL("/auth/request?error=invalid_token", request.url)
+      );
+    }
+
+    // Sign in successful - redirect to connections page
     return NextResponse.redirect(new URL("/connections", request.url));
   } catch (error) {
     console.error("Magic link authentication error:", error);

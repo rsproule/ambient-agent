@@ -1,6 +1,9 @@
 /**
- * Example API endpoint for GitHub integration
- * GET /api/integrations/github?userId={userId}&action={user|repos|activity}
+ * API endpoint for GitHub integration
+ * GET /api/integrations/github?action={user|repos|activity|repo|prs}
+ * 
+ * Note: userId is taken from authenticated session, not query parameters
+ * This prevents unauthorized access to other users' GitHub data
  */
 
 import {
@@ -10,20 +13,25 @@ import {
   listGitHubPullRequests,
   listGitHubRepos,
 } from "@/src/lib/integrations/github";
+import { auth } from "@/src/lib/auth/config";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get("userId");
-    const action = searchParams.get("action") || "user";
-
-    if (!userId) {
+    // Verify user is authenticated
+    const session = await auth();
+    if (!session?.user?.id) {
       return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
+        { error: "Unauthorized" },
+        { status: 401 }
       );
     }
+
+    // Get userId from authenticated session (not from query parameters)
+    const userId = session.user.id;
+
+    const { searchParams } = new URL(request.url);
+    const action = searchParams.get("action") || "user";
 
     switch (action) {
       case "user": {
