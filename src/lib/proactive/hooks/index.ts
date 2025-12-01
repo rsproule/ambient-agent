@@ -1,0 +1,13 @@
+/**
+ * Proactive Notification Hooks
+ *
+ * Each hook checks a specific data source for noteworthy information
+ * and returns whether to notify the user.
+ */
+
+export { checkCalendar } from "./checkCalendar";
+export { checkGitHub } from "./checkGitHub";
+export { checkGmail } from "./checkGmail";
+export { checkConnectionReminder } from "./checkConnectionReminder";
+export { checkScheduledJobs } from "./checkScheduledJobs";
+

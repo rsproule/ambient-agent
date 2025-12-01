@@ -47,10 +47,10 @@ model Message {
 }
 
 model User {
-  id            String       @id @default(cuid())
-  phoneNumber   String?      @unique // Optional: Phone number for DMs (1-1 mapping). Null for web-only users (merchants)
+  id            String         @id @default(cuid())
+  phoneNumber   String?        @unique // Optional: Phone number for DMs (1-1 mapping). Null for web-only users (merchants)
   name          String? // Optional display name
-  email         String?      @unique // Optional email
+  email         String?        @unique // Optional email
   emailVerified DateTime? // For NextAuth
   image         String? // Profile image URL
   outboundOptIn Boolean? // null = not asked, true = opted in, false = opted out
@@ -58,8 +58,9 @@ model User {
   accounts      Account[] // OAuth accounts
   sessions      Session[] // User sessions
   userContext   UserContext? // Research-based context
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  scheduledJobs ScheduledJob[] // User's scheduled jobs
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
 
   @@index([phoneNumber])
   @@index([email])
@@ -236,6 +237,12 @@ model UserContext {
   // User preferences
   timezone String? // e.g. "America/Los_Angeles" - inferred from calendar or set by user
 
+  // Proactive messaging settings - per-hook tracking
+  // JSON object: { "calendar": "2024-01-01T00:00:00Z", "github": "...", ... }
+  hookLastRunTimes Json? // When each hook last ran
+  // JSON object: { "calendar": 15, "github": 60, "gmail": 120, ... } (minutes)
+  hookCooldowns    Json? // Per-hook cooldown overrides (optional)
+
   // Structured findings
   summary      String?  @db.Text // AI-generated summary
   facts        Json? // Key facts array
@@ -266,4 +273,37 @@ model ContextDocument {
   createdAt DateTime @default(now())
 
   @@index([contextId])
+}
+
+// ============================================
+// Scheduled Jobs (User-defined fuzzy jobs)
+// ============================================
+
+enum ScheduledJobNotifyMode {
+  always // Always notify user of results
+  significant // Only notify if results are significant/interesting
+}
+
+model ScheduledJob {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name         String // Human-readable name, e.g. "AI news check"
+  prompt       String  @db.Text // The prompt to run, e.g. "Search for news about AI dev tools"
+  cronSchedule String // Cron expression, e.g. "0 8 * * *" (parsed from natural language by LLM)
+  timezone     String? // User's timezone for schedule interpretation
+
+  notifyMode ScheduledJobNotifyMode @default(significant)
+  enabled    Boolean                @default(true)
+
+  lastRunAt  DateTime? // When this job last ran
+  nextRunAt  DateTime? // When this job should next run
+  lastResult Json? // Store last run result for deduplication
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([enabled, nextRunAt])
 }

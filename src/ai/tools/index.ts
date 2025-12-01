@@ -7,6 +7,7 @@
  * - Generate magic links for account connections
  * - Create images
  * - Access integrated services (Gmail, GitHub, Calendar) via OAuth
+ * - Create and manage scheduled jobs
  */
 
 export { createImageTool } from "./createImage";
@@ -14,6 +15,14 @@ export { generateConnectionLinkTool } from "./generateConnectionLink";
 export { getUserContextTool } from "./getUserContext";
 export { requestResearchTool } from "./requestResearch";
 export { updateUserContextTool } from "./updateUserContext";
+
+// Scheduled job tools
+export {
+  createScheduledJobTool,
+  deleteScheduledJobTool,
+  listScheduledJobsTool,
+  toggleScheduledJobTool,
+} from "./scheduledJob";
 
 // Integration tools (context-bound)
 export { createCalendarTools } from "./calendar";

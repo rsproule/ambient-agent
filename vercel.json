@@ -3,6 +3,10 @@
     {
       "path": "/api/trigger-process-messages",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/proactive-scheduler",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
