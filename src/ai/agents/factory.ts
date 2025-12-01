@@ -13,6 +13,8 @@ export function defaultBuildContext(context: ConversationContext): string {
     conversationId: context.conversationId,
     isGroup: context.isGroup,
     summary: context.summary,
+    userContext: context.userContext,
+    systemState: context.systemState,
   });
 }
 

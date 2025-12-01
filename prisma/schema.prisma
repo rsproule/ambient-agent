@@ -2,13 +2,15 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
 }
 
 model Conversation {
@@ -51,10 +53,11 @@ model User {
   email         String?      @unique // Optional email
   emailVerified DateTime? // For NextAuth
   image         String? // Profile image URL
-  metadata      Json? // Optional additional user metadata
+  outboundOptIn Boolean? // null = not asked, true = opted in, false = opted out
   connections   Connection[] // User's connected accounts
   accounts      Account[] // OAuth accounts
   sessions      Session[] // User sessions
+  userContext   UserContext? // Research-based context
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
@@ -187,4 +190,80 @@ model Connection {
   @@unique([userId, provider])
   @@index([userId])
   @@index([status])
+}
+
+// ============================================
+// Research Job System
+// ============================================
+
+enum ResearchJobStatus {
+  pending
+  running
+  completed
+  failed
+}
+
+// Generic research job tracking
+model ResearchJob {
+  id            String  @id @default(cuid())
+  targetType    String // "user", "conversation"
+  targetId      String // userId or conversationId
+  triggerType   String // "oauth", "conversation", "manual", "scheduled"
+  triggerSource String? // Provider name, message context, etc.
+  triggerMeta   Json?
+
+  tasks       Json // ResearchTask[]
+  postProcess Json? // { notify, notifyOnlyIfSignificant }
+
+  status ResearchJobStatus @default(pending)
+  result Json? // Final output/summary
+  error  String?           @db.Text
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([targetType, targetId])
+  @@index([status])
+}
+
+// User context storage (research results live here)
+model UserContext {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // User preferences
+  timezone String? // e.g. "America/Los_Angeles" - inferred from calendar or set by user
+
+  // Structured findings
+  summary      String?  @db.Text // AI-generated summary
+  facts        Json? // Key facts array
+  interests    String[] // Detected interests/topics
+  professional Json? // Work info (company, role, projects)
+
+  documents ContextDocument[]
+
+  lastUpdatedAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+// Vector-searchable documents
+model ContextDocument {
+  id        String      @id @default(cuid())
+  contextId String
+  context   UserContext @relation(fields: [contextId], references: [id], onDelete: Cascade)
+
+  source    String // "gmail", "github", "calendar", "web", "conversation"
+  sourceUrl String? // Original URL if applicable
+  title     String
+  content   String                       @db.Text
+  embedding Unsupported("vector(1536)")? // OpenAI embedding dimension
+  isStale   Boolean                      @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([contextId])
 }

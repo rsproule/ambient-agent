@@ -1,9 +1,8 @@
 import {
   createImageTool,
   generateConnectionLinkTool,
-  getConversationConfigTool,
   getUserContextTool,
-  updateConversationConfigTool,
+  requestResearchTool,
   updateUserContextTool,
 } from "@/src/ai/tools";
 import { webSearchPerplexityTool } from "@/src/components/ai-tools/websearch/tool";
@@ -22,16 +21,17 @@ export const mrWhiskersAgent = createAgent({
   model: anthropic("claude-haiku-4-5-20251001"),
   schema: IMessageResponseSchema,
   tools: {
-    // Conversation configuration tools
-    getConversationConfig: getConversationConfigTool,
-    updateConversationConfig: updateConversationConfigTool,
+    // User context tools
     getUserContext: getUserContextTool,
     updateUserContext: updateUserContextTool,
 
     // Account connection tools
     generateConnectionLink: generateConnectionLinkTool,
 
-    // normalchatbot tools
+    // Research tools
+    requestResearch: requestResearchTool,
+
+    // Chat tools
     createImage: createImageTool,
     webSearch: webSearchPerplexityTool,
   },

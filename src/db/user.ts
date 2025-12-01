@@ -1,12 +1,10 @@
 import prisma from "@/src/db/client";
-import type { Prisma } from "@/src/generated/prisma";
 
 export interface User {
   id: string;
   phoneNumber?: string;
   name?: string;
   email?: string;
-  metadata?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,14 +13,12 @@ export interface CreateUserInput {
   phoneNumber?: string;
   name?: string;
   email?: string;
-  metadata?: Record<string, unknown>;
 }
 
 export interface UpdateUserInput {
   phoneNumber?: string;
   name?: string;
   email?: string;
-  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -34,7 +30,6 @@ export async function createUser(input: CreateUserInput): Promise<User> {
       phoneNumber: input.phoneNumber,
       name: input.name,
       email: input.email,
-      metadata: input.metadata as Prisma.InputJsonValue | undefined,
     },
   });
 
@@ -78,7 +73,6 @@ export async function updateUser(
       phoneNumber: input.phoneNumber,
       name: input.name,
       email: input.email,
-      metadata: input.metadata as Prisma.InputJsonValue | undefined,
     },
   });
 
@@ -123,15 +117,11 @@ export async function upsertUser(
       phoneNumber,
       name: input?.name,
       email: input?.email,
-      metadata: input?.metadata as Prisma.InputJsonValue | undefined,
     },
     update: {
       // Only update fields that are explicitly provided
       ...(input?.name !== undefined && { name: input.name }),
       ...(input?.email !== undefined && { email: input.email }),
-      ...(input?.metadata !== undefined && {
-        metadata: input.metadata as Prisma.InputJsonValue,
-      }),
     },
   });
 
@@ -154,61 +144,6 @@ export async function upsertUsers(phoneNumbers: string[]): Promise<User[]> {
 }
 
 /**
- * Get user context/config from metadata by phone number
- */
-export async function getUserContext(
-  phoneNumber: string,
-): Promise<Record<string, unknown> | null> {
-  const user = await prisma.user.findUnique({
-    where: { phoneNumber },
-    select: { metadata: true },
-  });
-
-  return user?.metadata as Record<string, unknown> | null;
-}
-
-/**
- * Update user context/config in metadata by phone number
- * Merges with existing metadata unless replace is true
- */
-export async function updateUserContext(
-  phoneNumber: string,
-  context: Record<string, unknown>,
-  replace: boolean = false,
-): Promise<User> {
-  // First ensure the user exists
-  const existingUser = await prisma.user.findUnique({
-    where: { phoneNumber },
-  });
-
-  if (!existingUser) {
-    // Create user if doesn't exist
-    return await upsertUser(phoneNumber, { metadata: context });
-  }
-
-  // Merge or replace metadata
-  const existingMetadata = existingUser.metadata as Record<
-    string,
-    unknown
-  > | null;
-  const newMetadata = replace
-    ? context
-    : {
-        ...(existingMetadata || {}),
-        ...context,
-      };
-
-  const user = await prisma.user.update({
-    where: { phoneNumber },
-    data: {
-      metadata: newMetadata as Prisma.InputJsonValue,
-    },
-  });
-
-  return formatUser(user);
-}
-
-/**
  * Get phone number for a user id (convenience function)
  */
 export async function getPhoneNumberForUser(
@@ -223,6 +158,33 @@ export async function getPhoneNumberForUser(
 }
 
 /**
+ * Set outbound opt-in preference for a user
+ */
+export async function setOutboundOptIn(
+  phoneNumber: string,
+  optIn: boolean,
+): Promise<void> {
+  await prisma.user.update({
+    where: { phoneNumber },
+    data: { outboundOptIn: optIn },
+  });
+}
+
+/**
+ * Get outbound opt-in status for a user
+ */
+export async function getOutboundOptIn(
+  phoneNumber: string,
+): Promise<boolean | null> {
+  const user = await prisma.user.findUnique({
+    where: { phoneNumber },
+    select: { outboundOptIn: true },
+  });
+
+  return user?.outboundOptIn ?? null;
+}
+
+/**
  * Format user from database to application format
  */
 function formatUser(user: {
@@ -230,7 +192,6 @@ function formatUser(user: {
   phoneNumber: string | null;
   name: string | null;
   email: string | null;
-  metadata: unknown;
   createdAt: Date;
   updatedAt: Date;
 }): User {
@@ -239,7 +200,6 @@ function formatUser(user: {
     phoneNumber: user.phoneNumber ?? undefined,
     name: user.name ?? undefined,
     email: user.email ?? undefined,
-    metadata: user.metadata as Record<string, unknown> | undefined,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };

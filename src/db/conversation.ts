@@ -1,6 +1,46 @@
+import type {
+  SystemState,
+  UserResearchContext,
+} from "@/src/ai/agents/systemPrompt";
 import prisma from "@/src/db/client";
+import { getUserConnections } from "@/src/db/connection";
+import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
+import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
 import type { ModelMessage } from "ai";
+
+/**
+ * Get current time info for system state
+ * TODO: Support user-specific timezone preferences
+ */
+function getCurrentTimeInfo(
+  timezone: string = "America/Los_Angeles",
+): SystemState["currentTime"] {
+  const now = new Date();
+
+  const formatted = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const dayOfWeek = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+  });
+
+  return {
+    iso: now.toISOString(),
+    formatted,
+    timezone,
+    dayOfWeek,
+  };
+}
 
 export interface ConversationMessage {
   id: string;
@@ -18,7 +58,8 @@ export interface ConversationContext {
   participants: string[];
   summary?: string; // Optional: compressed context summary for future use
   sender?: string; // Phone number of the user who sent the last message (for tool auth)
-  // Future: can add more context fields here (preferences, history, etc.)
+  userContext?: UserResearchContext | null; // Research-based user context
+  systemState?: SystemState | null; // Connection status and other system state
 }
 
 /**
@@ -243,6 +284,98 @@ export async function getConversationMessages(
     .find((msg) => msg.role === "user" && msg.sender);
   const sender = lastUserMessage?.sender ?? undefined;
 
+  // Fetch user research context and system state for direct messages
+  let userContext: UserResearchContext | null = null;
+  let systemState: SystemState | null = null;
+
+  if (!conversation.isGroup && sender) {
+    try {
+      // Get user by phone number to fetch their connections and outbound opt-in
+      const user = await prisma.user.findUnique({
+        where: { phoneNumber: sender },
+        select: { id: true, outboundOptIn: true },
+      });
+
+      if (user) {
+        // Fetch research context
+        const researchContext = await getUserContextByPhone(sender);
+        if (researchContext) {
+          userContext = {
+            summary: researchContext.summary,
+            interests: researchContext.interests,
+            professional: researchContext.professional,
+            facts: researchContext.facts,
+            recentDocuments: researchContext.documents
+              ?.slice(0, 5)
+              .map((d) => ({
+                title: d.title,
+                source: d.source,
+              })),
+          };
+        }
+
+        // Fetch connection status
+        const connections = await getUserConnections(user.id);
+        const gmailConnected = connections.some(
+          (c) => c.provider === "google_gmail" && c.status === "connected",
+        );
+        const githubConnected = connections.some(
+          (c) => c.provider === "github" && c.status === "connected",
+        );
+        const calendarConnected = connections.some(
+          (c) => c.provider === "google_calendar" && c.status === "connected",
+        );
+
+        // Get timezone: prefer stored, then try calendar, then null (will prompt user)
+        let userTimezone = researchContext?.timezone || null;
+
+        // If no stored timezone but calendar is connected, try to fetch it
+        if (!userTimezone && calendarConnected) {
+          try {
+            const calendarTimezone = await getUserTimezoneFromCalendar(user.id);
+            if (calendarTimezone) {
+              userTimezone = calendarTimezone;
+              // Save it for next time
+              await updateUserContext(user.id, { timezone: calendarTimezone });
+            }
+          } catch {
+            // Calendar API failed, ignore
+          }
+        }
+
+        systemState = {
+          currentTime: getCurrentTimeInfo(
+            userTimezone || "America/Los_Angeles",
+          ),
+          connections: {
+            gmail: gmailConnected,
+            github: githubConnected,
+            calendar: calendarConnected,
+          },
+          hasAnyConnection:
+            gmailConnected || githubConnected || calendarConnected,
+          researchStatus: researchContext ? "completed" : "none",
+          outboundOptIn: user.outboundOptIn,
+          timezoneSource: userTimezone ? "known" : "default",
+        };
+      }
+    } catch (error) {
+      console.warn(
+        `[getConversationMessages] Failed to fetch user context:`,
+        error,
+      );
+    }
+  }
+
+  // Always provide at least time info, even if no user context
+  if (!systemState) {
+    systemState = {
+      currentTime: getCurrentTimeInfo("America/Los_Angeles"),
+      connections: { gmail: false, github: false, calendar: false },
+      hasAnyConnection: false,
+    };
+  }
+
   return {
     messages: formattedMessages,
     context: {
@@ -252,6 +385,8 @@ export async function getConversationMessages(
       participants: conversation.participants,
       summary: conversation.summary ?? undefined,
       sender,
+      userContext,
+      systemState,
     },
   };
 }

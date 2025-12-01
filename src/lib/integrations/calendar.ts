@@ -183,3 +183,32 @@ export async function getWeeklyEvents(
     maxResults: 100,
   });
 }
+
+/**
+ * Get user's calendar settings (includes timezone)
+ */
+export async function getCalendarSettings(
+  userId: string,
+): Promise<calendar_v3.Schema$Setting[]> {
+  const response = await calendarProxyGet<{
+    items: calendar_v3.Schema$Setting[];
+  }>(userId, "/users/me/settings");
+  return response.items || [];
+}
+
+/**
+ * Get user's timezone from Google Calendar
+ * Returns null if calendar not connected or timezone not found
+ */
+export async function getUserTimezoneFromCalendar(
+  userId: string,
+): Promise<string | null> {
+  try {
+    const settings = await getCalendarSettings(userId);
+    const timezoneSetting = settings.find((s) => s.id === "timezone");
+    return timezoneSetting?.value || null;
+  } catch {
+    // Calendar not connected or API error
+    return null;
+  }
+}
