@@ -44,7 +44,7 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
         style={{ aspectRatio: ratio }}
       >
         <Skeleton className="absolute inset-0 h-full w-full" />
-        <div className="absolute inset-0 bg-gradient-to-br from-foreground/5 via-transparent to-transparent" />
+        <div className="absolute inset-0 bg-linear-to-br from-foreground/5 via-transparent to-transparent" />
       </div>
     ))
   }
