@@ -54,8 +54,6 @@ export default function ScheduledJobsPage() {
   });
   const [isSaving, setIsSaving] = useState(false);
 
-  const userId = (session?.user as { id?: string })?.id;
-
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/auth/request");
@@ -63,17 +61,15 @@ export default function ScheduledJobsPage() {
   }, [status, router]);
 
   useEffect(() => {
-    if (userId) {
+    if (status === "authenticated") {
       fetchJobs();
     }
-  }, [userId]);
+  }, [status]);
 
   const fetchJobs = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(
-        `/api/connections/scheduled-jobs?userId=${userId}`
-      );
+      const response = await fetch(`/api/connections/scheduled-jobs`);
       if (response.ok) {
         const data = await response.json();
         setJobs(data.jobs || []);
@@ -90,7 +86,7 @@ export default function ScheduledJobsPage() {
       await fetch(`/api/connections/scheduled-jobs/${jobId}/toggle`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, enabled }),
+        body: JSON.stringify({ enabled }),
       });
       setJobs((prev) =>
         prev.map((j) => (j.id === jobId ? { ...j, enabled } : j))
@@ -108,8 +104,6 @@ export default function ScheduledJobsPage() {
     try {
       await fetch(`/api/connections/scheduled-jobs/${jobId}`, {
         method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
       });
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
     } catch (error) {
@@ -137,10 +131,7 @@ export default function ScheduledJobsPage() {
         {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userId,
-            ...editForm,
-          }),
+          body: JSON.stringify(editForm),
         }
       );
 

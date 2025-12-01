@@ -195,7 +195,6 @@ export default function ConnectionsPage({
               key={provider.id}
               provider={provider}
               connection={connection}
-              userId={userId}
               onConnect={() => handleConnect(provider)}
               onDisconnect={() => handleDisconnect(provider)}
             />

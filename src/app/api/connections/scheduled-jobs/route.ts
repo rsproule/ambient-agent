@@ -7,8 +7,12 @@
 import prisma from "@/src/db/client";
 import { getUserConnections } from "@/src/db/connection";
 import { getScheduledJobsForUser } from "@/src/db/scheduledJob";
-import { DEFAULT_HOOK_SCHEDULES, type HookName } from "@/src/lib/proactive/types";
-import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/src/lib/auth/config";
+import {
+  DEFAULT_HOOK_SCHEDULES,
+  type HookName,
+} from "@/src/lib/proactive/types";
+import { NextResponse } from "next/server";
 
 // Default hook configurations
 const DEFAULT_HOOKS: Record<
@@ -37,55 +41,66 @@ const DEFAULT_HOOKS: Record<
 };
 
 /**
- * GET /api/connections/scheduled-jobs?userId=xxx
+ * GET /api/connections/scheduled-jobs
  *
- * Get user's scheduled jobs (default + user-created)
+ * Get authenticated user's scheduled jobs (default + user-created)
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const userId = request.nextUrl.searchParams.get("userId");
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const userId = session.user.id;
 
     // Get user's connections to determine which default hooks are available
     const connections = await getUserConnections(userId);
     const connectedProviders = new Set(
-      connections.filter((c) => c.status === "connected").map((c) => c.provider)
+      connections
+        .filter((c) => c.status === "connected")
+        .map((c) => c.provider)
     );
 
     // Get user's hook settings
     const userContext = await prisma.userContext.findUnique({
       where: { userId },
     });
-    const hookCooldowns = (userContext?.hookCooldowns as Record<string, number>) || {};
+    const hookCooldowns =
+      (userContext?.hookCooldowns as Record<string, number>) || {};
 
     // Build default jobs list
-    const defaultJobs = Object.entries(DEFAULT_HOOKS).map(([hookId, config]) => {
-      const cooldown = hookCooldowns[hookId] ?? DEFAULT_HOOK_SCHEDULES[hookId as HookName];
-      const enabled = cooldown !== 0;
-      
-      // Check if this hook's required connection is active
-      const isAvailable = !config.requiresConnection || 
-        connectedProviders.has(config.requiresConnection as "google_gmail" | "github" | "google_calendar");
+    const defaultJobs = Object.entries(DEFAULT_HOOKS).map(
+      ([hookId, config]) => {
+        const cooldown =
+          hookCooldowns[hookId] ?? DEFAULT_HOOK_SCHEDULES[hookId as HookName];
+        const enabled = cooldown !== 0;
 
-      return {
-        id: `default:${hookId}`,
-        name: config.name,
-        prompt: config.prompt,
-        cronSchedule: `Every ${formatCooldown(cooldown || DEFAULT_HOOK_SCHEDULES[hookId as HookName])}`,
-        enabled: enabled && isAvailable,
-        notifyMode: "significant" as const,
-        isDefault: true,
-        isAvailable,
-        requiresConnection: config.requiresConnection,
-        cooldownMinutes: cooldown || DEFAULT_HOOK_SCHEDULES[hookId as HookName],
-      };
-    });
+        // Check if this hook's required connection is active
+        const isAvailable =
+          !config.requiresConnection ||
+          connectedProviders.has(
+            config.requiresConnection as
+              | "google_gmail"
+              | "github"
+              | "google_calendar"
+          );
+
+        return {
+          id: `default:${hookId}`,
+          name: config.name,
+          prompt: config.prompt,
+          cronSchedule: `Every ${formatCooldown(cooldown || DEFAULT_HOOK_SCHEDULES[hookId as HookName])}`,
+          enabled: enabled && isAvailable,
+          notifyMode: "significant" as const,
+          isDefault: true,
+          isAvailable,
+          requiresConnection: config.requiresConnection,
+          cooldownMinutes:
+            cooldown || DEFAULT_HOOK_SCHEDULES[hookId as HookName],
+        };
+      }
+    );
 
     // Get user-created jobs
     const userJobs = await getScheduledJobsForUser(userId);
@@ -110,7 +125,7 @@ export async function GET(request: NextRequest) {
     console.error("[API] Error fetching scheduled jobs:", error);
     return NextResponse.json(
       { error: "Failed to fetch scheduled jobs" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -121,4 +136,3 @@ function formatCooldown(minutes: number): string {
   if (minutes >= 60) return `${Math.floor(minutes / 60)} hour`;
   return `${minutes} min`;
 }
-

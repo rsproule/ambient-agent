@@ -6,23 +6,22 @@
 
 import prisma from "@/src/db/client";
 import type { Prisma } from "@/src/generated/prisma";
-import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/src/lib/auth/config";
+import { NextResponse } from "next/server";
 
 /**
- * GET /api/connections/settings?userId=xxx
+ * GET /api/connections/settings
  *
- * Get user's proactive settings
+ * Get authenticated user's proactive settings
  */
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const userId = request.nextUrl.searchParams.get("userId");
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const userId = session.user.id;
 
     const userContext = await prisma.userContext.findUnique({
       where: { userId },
@@ -36,10 +35,12 @@ export async function GET(request: NextRequest) {
     }
 
     // Parse hookCooldowns JSON
-    const hookCooldowns = userContext.hookCooldowns as Record<string, number> | null;
+    const hookCooldowns = userContext.hookCooldowns as Record<
+      string,
+      number
+    > | null;
 
-    // Disabled hooks are stored as cooldown = -1 or in a separate field
-    // For simplicity, let's add a disabledHooks field or use cooldown = 0
+    // Disabled hooks are stored as cooldown = 0
     const disabledHooks: string[] = [];
     if (hookCooldowns) {
       for (const [hook, cooldown] of Object.entries(hookCooldowns)) {
@@ -57,7 +58,7 @@ export async function GET(request: NextRequest) {
     console.error("[API] Error fetching settings:", error);
     return NextResponse.json(
       { error: "Failed to fetch settings" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -65,26 +66,24 @@ export async function GET(request: NextRequest) {
 /**
  * POST /api/connections/settings
  *
- * Update user's proactive settings
+ * Update authenticated user's proactive settings
  *
  * Body:
  * {
- *   "userId": "xxx",
  *   "hookCooldowns": { "calendar": 15, "github": 60, ... },
  *   "disabledHooks": ["gmail", ...]
  * }
  */
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const body = await request.json();
-    const { userId, hookCooldowns, disabledHooks } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const userId = session.user.id;
+    const body = await request.json();
+    const { hookCooldowns, disabledHooks } = body;
 
     // Merge disabled hooks into cooldowns (set to 0 for disabled)
     const finalCooldowns: Record<string, number> = { ...hookCooldowns };
@@ -111,8 +110,7 @@ export async function POST(request: NextRequest) {
     console.error("[API] Error saving settings:", error);
     return NextResponse.json(
       { error: "Failed to save settings" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
-

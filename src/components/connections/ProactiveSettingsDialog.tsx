@@ -24,7 +24,6 @@ type HookSettingsMap = Partial<Record<HookName, HookSettings>>;
 interface ProactiveSettingsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  userId: string;
   providerId: string; // e.g. "google_gmail", "github", "google_calendar"
   providerName: string;
   onDisconnect: () => void;
@@ -72,7 +71,6 @@ const COOLDOWN_OPTIONS = [
 export function ProactiveSettingsDialog({
   open,
   onOpenChange,
-  userId,
   providerId,
   providerName,
   onDisconnect,
@@ -98,12 +96,12 @@ export function ProactiveSettingsDialog({
     if (open) {
       fetchSettings();
     }
-  }, [open, userId]);
+  }, [open]);
 
   const fetchSettings = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(`/api/connections/settings?userId=${userId}`);
+      const response = await fetch(`/api/connections/settings`);
       if (response.ok) {
         const data = await response.json();
         if (data.hookCooldowns) {
@@ -113,7 +111,8 @@ export function ProactiveSettingsDialog({
               if (data.hookCooldowns[hook] !== undefined) {
                 updated[hook] = {
                   enabled: data.hookCooldowns[hook] !== 0,
-                  cooldownMinutes: data.hookCooldowns[hook] || DEFAULT_HOOK_SCHEDULES[hook],
+                  cooldownMinutes:
+                    data.hookCooldowns[hook] || DEFAULT_HOOK_SCHEDULES[hook],
                 };
               }
             }
@@ -163,10 +162,7 @@ export function ProactiveSettingsDialog({
       await fetch(`/api/connections/settings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId,
-          hookCooldowns,
-        }),
+        body: JSON.stringify({ hookCooldowns }),
       });
 
       onOpenChange(false);

@@ -9,6 +9,7 @@ import {
   getScheduledJob,
   updateScheduledJob,
 } from "@/src/db/scheduledJob";
+import { auth } from "@/src/lib/auth/config";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -18,7 +19,6 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Body:
  * {
- *   "userId": "xxx",  // For verification
  *   "name"?: "string",
  *   "prompt"?: "string",
  *   "cronSchedule"?: "string",
@@ -27,21 +27,20 @@ import { NextRequest, NextResponse } from "next/server";
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> },
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const { jobId } = await params;
-    const body = await request.json();
-    const { userId, name, prompt, cronSchedule, notifyMode } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify job exists and belongs to user
+    const userId = session.user.id;
+    const { jobId } = await params;
+    const body = await request.json();
+    const { name, prompt, cronSchedule, notifyMode } = body;
+
+    // Verify job exists and belongs to authenticated user
     const job = await getScheduledJob(jobId);
     if (!job) {
       return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -71,7 +70,7 @@ export async function PUT(
     console.error("[API] Error updating scheduled job:", error);
     return NextResponse.json(
       { error: "Failed to update scheduled job" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
@@ -80,42 +79,28 @@ export async function PUT(
  * DELETE /api/connections/scheduled-jobs/[jobId]
  *
  * Delete a scheduled job
- *
- * Body:
- * {
- *   "userId": "xxx"  // For verification
- * }
  */
 export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ jobId: string }> },
+  _request: NextRequest,
+  { params }: { params: Promise<{ jobId: string }> }
 ) {
   try {
-    const { jobId } = await params;
-    const body = await request.json();
-    const { userId } = body;
-
-    if (!userId) {
-      return NextResponse.json(
-        { error: "userId is required" },
-        { status: 400 },
-      );
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Verify job exists and belongs to user
+    const userId = session.user.id;
+    const { jobId } = await params;
+
+    // Verify job exists and belongs to authenticated user
     const job = await getScheduledJob(jobId);
     if (!job) {
-      return NextResponse.json(
-        { error: "Job not found" },
-        { status: 404 },
-      );
+      return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
     if (job.userId !== userId) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 403 },
-      );
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
     }
 
     await deleteScheduledJob(jobId);
@@ -125,8 +110,7 @@ export async function DELETE(
     console.error("[API] Error deleting scheduled job:", error);
     return NextResponse.json(
       { error: "Failed to delete scheduled job" },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
-

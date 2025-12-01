@@ -18,7 +18,6 @@ interface Connection {
 interface ConnectionCardProps {
   provider: ProviderConfig;
   connection?: Connection;
-  userId: string;
   onConnect: () => void;
   onDisconnect: () => void;
 }
@@ -26,7 +25,6 @@ interface ConnectionCardProps {
 export function ConnectionCard({
   provider,
   connection,
-  userId,
   onConnect,
   onDisconnect,
 }: ConnectionCardProps) {
@@ -89,7 +87,6 @@ export function ConnectionCard({
       <ProactiveSettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
-        userId={userId}
         providerId={provider.id}
         providerName={provider.name}
         onDisconnect={onDisconnect}
