@@ -1,11 +1,12 @@
-import { PrismaNeon } from "@prisma/adapter-neon";
+import { PrismaNeonHttp } from "@prisma/adapter-neon";
 import { PrismaClient } from "../generated/prisma";
 
-// Create Prisma client with Neon adapter (following Vercel docs)
-// The Neon adapter handles connection pooling internally
+// Create Prisma client with Neon HTTP adapter (better for serverless)
+// Uses HTTP instead of WebSocket which works in all environments
 const createPrismaClient = () => {
-  const adapter = new PrismaNeon({
-    connectionString: process.env.DATABASE_URL,
+  const adapter = new PrismaNeonHttp(process.env.DATABASE_URL || "", {
+    fullResults: false,
+    arrayMode: false,
   });
   return new PrismaClient({
     adapter,
