@@ -29,7 +29,7 @@ export default function Home() {
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
           <Link
-            href="/auth/request"
+            href="/connections"
             className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-md shadow-md transition-colors"
           >
             <svg
@@ -63,10 +63,6 @@ export default function Home() {
             Chat with Mr. Whiskers
           </a>
         </div>
-
-        <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-4">
-          Get a secure magic link via iMessage to manage your integrations
-        </p>
       </main>
     </div>
   );
