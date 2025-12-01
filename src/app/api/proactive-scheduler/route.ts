@@ -54,6 +54,7 @@ export async function GET(request: NextRequest) {
  * POST /api/proactive-scheduler
  *
  * Manual trigger endpoint for testing
+ * Protected by CRON_SECRET
  *
  * Body (optional):
  * {
@@ -62,11 +63,22 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify authorization
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+      console.warn("[API] Unauthorized POST request to proactive-scheduler");
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json().catch(() => ({}));
     const userIds = body.userIds as string[] | undefined;
 
     console.log(
-      `[API] Manual proactive scheduler trigger${userIds ? ` for ${userIds.length} users` : ""}`,
+      `[API] Manual proactive scheduler trigger${
+        userIds ? ` for ${userIds.length} users` : ""
+      }`,
     );
 
     const handle = await tasks.trigger<typeof proactiveScheduler>(
@@ -93,4 +105,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-
