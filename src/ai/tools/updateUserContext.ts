@@ -1,8 +1,8 @@
 import { getUserByPhoneNumber, setOutboundOptIn } from "@/src/db/user";
 import {
-  updateUserContext as updateUserContextDb,
   appendInterests,
   getOrCreateUserContext,
+  updateUserContext as updateUserContextDb,
 } from "@/src/db/userContext";
 import { queueConversationResearchJob } from "@/src/lib/research/createJob";
 import { tool, zodSchema } from "ai";
@@ -12,6 +12,7 @@ import { z } from "zod";
  * Tool for updating user context
  *
  * Allows the agent to store information about a user including:
+ * - Timezone preference
  * - Professional info (company, role, projects)
  * - Interests and topics they care about
  * - Outbound messaging permission
@@ -21,7 +22,7 @@ import { z } from "zod";
 export const updateUserContextTool = tool({
   description:
     "Update or store context for a specific user by their phone number. " +
-    "Use this to save information the user shares about themselves. " +
+    "Use this to save information the user shares about themselves, including their timezone. " +
     "Can record outbound messaging permission (outboundOptIn). " +
     "For important facts about the user (job changes, new interests), set storeAsFact=true " +
     "to store it in the research system with semantic search.",
@@ -30,6 +31,13 @@ export const updateUserContextTool = tool({
       phoneNumber: z
         .string()
         .describe("The user's phone number (E.164 format or email)"),
+      timezone: z
+        .string()
+        .optional()
+        .describe(
+          "User's timezone in IANA format (e.g. 'America/New_York', 'Europe/London', 'Asia/Tokyo'). " +
+            "Set this when the user tells you their timezone or location.",
+        ),
       interests: z
         .array(z.string())
         .optional()
@@ -80,6 +88,7 @@ export const updateUserContextTool = tool({
   ),
   execute: async ({
     phoneNumber,
+    timezone,
     interests,
     professional,
     outboundOptIn,
@@ -99,9 +108,14 @@ export const updateUserContextTool = tool({
 
       // Update user context in the new system
       const updates: {
+        timezone?: string;
         interests?: string[];
         professional?: Record<string, unknown>;
       } = {};
+
+      if (timezone) {
+        updates.timezone = timezone;
+      }
 
       if (interests && interests.length > 0) {
         await appendInterests(user.id, interests);
@@ -113,6 +127,10 @@ export const updateUserContextTool = tool({
           ...(existingContext.professional || {}),
           ...professional,
         };
+      }
+
+      // Apply updates if any
+      if (Object.keys(updates).length > 0) {
         await updateUserContextDb(user.id, updates);
       }
 
@@ -132,7 +150,12 @@ export const updateUserContextTool = tool({
         researchJobId = jobId;
       }
 
-      const messageParts = [`User context updated successfully for ${phoneNumber}.`];
+      const messageParts = [
+        `User context updated successfully for ${phoneNumber}.`,
+      ];
+      if (timezone) {
+        messageParts.push(`Timezone set to ${timezone}.`);
+      }
       if (interests && interests.length > 0) {
         messageParts.push(`Added ${interests.length} interests.`);
       }

@@ -233,6 +233,9 @@ model UserContext {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // User preferences
+  timezone String? // e.g. "America/Los_Angeles" - inferred from calendar or set by user
+
   // Structured findings
   summary      String?  @db.Text // AI-generated summary
   facts        Json? // Key facts array

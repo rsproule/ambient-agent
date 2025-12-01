@@ -4,9 +4,43 @@ import type {
 } from "@/src/ai/agents/systemPrompt";
 import prisma from "@/src/db/client";
 import { getUserConnections } from "@/src/db/connection";
-import { getUserContextByPhone } from "@/src/db/userContext";
+import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
+import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
 import type { ModelMessage } from "ai";
+
+/**
+ * Get current time info for system state
+ * TODO: Support user-specific timezone preferences
+ */
+function getCurrentTimeInfo(
+  timezone: string = "America/Los_Angeles",
+): SystemState["currentTime"] {
+  const now = new Date();
+
+  const formatted = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  });
+
+  const dayOfWeek = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+  });
+
+  return {
+    iso: now.toISOString(),
+    formatted,
+    timezone,
+    dayOfWeek,
+  };
+}
 
 export interface ConversationMessage {
   id: string;
@@ -292,7 +326,27 @@ export async function getConversationMessages(
           (c) => c.provider === "google_calendar" && c.status === "connected",
         );
 
+        // Get timezone: prefer stored, then try calendar, then null (will prompt user)
+        let userTimezone = researchContext?.timezone || null;
+
+        // If no stored timezone but calendar is connected, try to fetch it
+        if (!userTimezone && calendarConnected) {
+          try {
+            const calendarTimezone = await getUserTimezoneFromCalendar(user.id);
+            if (calendarTimezone) {
+              userTimezone = calendarTimezone;
+              // Save it for next time
+              await updateUserContext(user.id, { timezone: calendarTimezone });
+            }
+          } catch {
+            // Calendar API failed, ignore
+          }
+        }
+
         systemState = {
+          currentTime: getCurrentTimeInfo(
+            userTimezone || "America/Los_Angeles",
+          ),
           connections: {
             gmail: gmailConnected,
             github: githubConnected,
@@ -302,6 +356,7 @@ export async function getConversationMessages(
             gmailConnected || githubConnected || calendarConnected,
           researchStatus: researchContext ? "completed" : "none",
           outboundOptIn: user.outboundOptIn,
+          timezoneSource: userTimezone ? "known" : "default",
         };
       }
     } catch (error) {
@@ -310,6 +365,15 @@ export async function getConversationMessages(
         error,
       );
     }
+  }
+
+  // Always provide at least time info, even if no user context
+  if (!systemState) {
+    systemState = {
+      currentTime: getCurrentTimeInfo("America/Los_Angeles"),
+      connections: { gmail: false, github: false, calendar: false },
+      hasAnyConnection: false,
+    };
   }
 
   return {

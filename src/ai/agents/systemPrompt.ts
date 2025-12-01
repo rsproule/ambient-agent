@@ -109,6 +109,16 @@ export interface UserResearchContext {
  * System state for contextual prompts
  */
 export interface SystemState {
+  // Current time info
+  currentTime: {
+    iso: string; // ISO 8601 format
+    formatted: string; // Human readable: "Monday, December 1, 2025 at 3:45 PM"
+    timezone: string; // e.g. "America/Los_Angeles"
+    dayOfWeek: string; // e.g. "Monday"
+  };
+  timezoneSource?: "known" | "default"; // Whether timezone is from user or assumed
+
+  // Connection status
   connections: {
     gmail: boolean;
     github: boolean;
@@ -133,8 +143,28 @@ export function buildConversationContextPrompt(context: {
 }): string {
   const parts: string[] = [];
 
+  // Current time - always show this first
+  if (context.systemState?.currentTime) {
+    const { formatted, timezone, dayOfWeek } = context.systemState.currentTime;
+    const isAssumed = context.systemState.timezoneSource === "default";
+
+    parts.push(
+      `CURRENT TIME: ${formatted} (${timezone}${
+        isAssumed ? " - assumed" : ""
+      })`,
+    );
+    parts.push(`Today is ${dayOfWeek}`);
+
+    if (isAssumed) {
+      parts.push(
+        "⚠️ Timezone is assumed (not confirmed). If time-sensitive, ask user for their timezone.",
+      );
+    }
+    parts.push("");
+  }
+
   // Conversation identifier
-  parts.push(`CURRENT CONVERSATION ID: ${context.conversationId}`);
+  parts.push(`CONVERSATION ID: ${context.conversationId}`);
   parts.push("");
 
   // Conversation type

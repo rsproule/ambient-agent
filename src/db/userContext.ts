@@ -8,6 +8,7 @@ import type { Prisma } from "@/src/generated/prisma";
 export interface UserContext {
   id: string;
   userId: string;
+  timezone: string | null;
   summary: string | null;
   facts: unknown[] | null;
   interests: string[];
@@ -111,6 +112,7 @@ export async function getUserContextByPhone(
 export async function updateUserContext(
   userId: string,
   updates: {
+    timezone?: string;
     summary?: string;
     facts?: unknown[];
     interests?: string[];
@@ -121,6 +123,7 @@ export async function updateUserContext(
     where: { userId },
     create: {
       userId,
+      timezone: updates.timezone,
       summary: updates.summary,
       facts: updates.facts as Prisma.InputJsonValue | undefined,
       interests: updates.interests || [],
@@ -128,6 +131,7 @@ export async function updateUserContext(
       lastUpdatedAt: new Date(),
     },
     update: {
+      ...(updates.timezone !== undefined && { timezone: updates.timezone }),
       ...(updates.summary !== undefined && { summary: updates.summary }),
       ...(updates.facts !== undefined && {
         facts: updates.facts as Prisma.InputJsonValue,
@@ -513,6 +517,7 @@ export async function getUserContextWithRelevantDocs(
 function formatUserContext(context: {
   id: string;
   userId: string;
+  timezone: string | null;
   summary: string | null;
   facts: unknown;
   interests: string[];
@@ -523,6 +528,7 @@ function formatUserContext(context: {
   return {
     id: context.id,
     userId: context.userId,
+    timezone: context.timezone,
     summary: context.summary,
     facts: context.facts as unknown[] | null,
     interests: context.interests,
