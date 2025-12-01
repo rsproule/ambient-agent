@@ -10,3 +10,8 @@ export * from "./tasks/handleMessage";
 export * from "./tasks/processMessages";
 export * from "./tasks/runResearchJob";
 export * from "./tasks/notifyUserOfResearch";
+
+// Proactive notification tasks
+export * from "./tasks/proactiveScheduler";
+export * from "./tasks/proactiveUserCheck";
+export * from "./tasks/runScheduledJob";

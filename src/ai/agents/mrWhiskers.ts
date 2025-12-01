@@ -1,8 +1,12 @@
 import {
   createImageTool,
+  createScheduledJobTool,
+  deleteScheduledJobTool,
   generateConnectionLinkTool,
   getUserContextTool,
+  listScheduledJobsTool,
   requestResearchTool,
+  toggleScheduledJobTool,
   updateUserContextTool,
 } from "@/src/ai/tools";
 import { webSearchPerplexityTool } from "@/src/components/ai-tools/websearch/tool";
@@ -30,6 +34,12 @@ export const mrWhiskersAgent = createAgent({
 
     // Research tools
     requestResearch: requestResearchTool,
+
+    // Scheduled job tools
+    createScheduledJob: createScheduledJobTool,
+    listScheduledJobs: listScheduledJobsTool,
+    deleteScheduledJob: deleteScheduledJobTool,
+    toggleScheduledJob: toggleScheduledJobTool,
 
     // Chat tools
     createImage: createImageTool,
