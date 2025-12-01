@@ -1,84 +1,74 @@
 /**
  * GitHub Integration Utilities
  *
- * Example utilities for working with connected GitHub accounts
+ * Uses Pipedream Connect's proxy to make authenticated GitHub API calls
+ * Documentation: https://pipedream.com/docs/connect/quickstart
  */
 
-import { getConnection, updateConnection } from "@/src/db/connection";
-import { getRefreshedAccount } from "@/src/lib/pipedream/client";
+import { getConnection } from "@/src/db/connection";
+import { pipedream } from "@/src/lib/pipedream/client";
 import { Octokit } from "@octokit/rest";
 
 // Use Octokit REST API response types
-export type GitHubRepo = Awaited<
-  ReturnType<Octokit["rest"]["repos"]["get"]>
->["data"];
 export type GitHubUser = Awaited<
   ReturnType<Octokit["rest"]["users"]["getAuthenticated"]>
 >["data"];
+
+export type GitHubRepo = Awaited<
+  ReturnType<Octokit["rest"]["repos"]["get"]>
+>["data"];
+
 export type GitHubPullRequest = Awaited<
   ReturnType<Octokit["rest"]["pulls"]["get"]>
 >["data"];
 
 /**
- * Get an authenticated GitHub client, refreshing token if necessary
+ * Get connection info for making proxied GitHub API calls
  */
-async function getGitHubClient(userId: string): Promise<Octokit> {
+async function getGitHubConnection(userId: string) {
   const connection = await getConnection(userId, "github");
 
   if (!connection || connection.status !== "connected") {
     throw new Error("GitHub not connected");
   }
 
-  // GitHub tokens don't typically expire, but we refresh if needed
-  if (connection.expiresAt && new Date() > connection.expiresAt) {
-    if (!connection.pipedreamAccountId) {
-      throw new Error("Missing Pipedream account ID");
-    }
-
-    const refreshed = await getRefreshedAccount(connection.pipedreamAccountId);
-
-    // Extract OAuth credentials from the credentials object
-    const credentials = refreshed.credentials as
-      | Record<string, unknown>
-      | undefined;
-    const oauthAccessToken = credentials?.oauth_access_token as
-      | string
-      | undefined;
-    const oauthRefreshToken = credentials?.oauth_refresh_token as
-      | string
-      | undefined;
-
-    // Update connection with new tokens
-    await updateConnection(userId, "github", {
-      accessToken: oauthAccessToken,
-      refreshToken: oauthRefreshToken,
-      expiresAt: refreshed.expiresAt,
-      lastSyncedAt: new Date(),
-    });
-
-    return new Octokit({
-      auth: oauthAccessToken,
-    });
+  if (!connection.pipedreamAccountId) {
+    throw new Error("Missing Pipedream account ID");
   }
 
-  if (!connection.accessToken) {
-    throw new Error("No access token available");
-  }
+  return {
+    accountId: connection.pipedreamAccountId,
+    externalUserId: connection.userId,
+  };
+}
 
-  return new Octokit({
-    auth: connection.accessToken,
+/**
+ * Make an authenticated GET request to GitHub API via Pipedream proxy
+ */
+async function githubProxyGet<T>(
+  userId: string,
+  path: string,
+  params?: Record<string, string | object | string[] | object[] | null>,
+): Promise<T> {
+  const { accountId, externalUserId } = await getGitHubConnection(userId);
+
+  const url = `https://api.github.com${path}`;
+
+  const response = await pipedream.proxy.get({
+    url,
+    accountId,
+    externalUserId,
+    params,
   });
+
+  return response as T;
 }
 
 /**
  * Get authenticated user's GitHub profile
  */
 export async function getGitHubUser(userId: string): Promise<GitHubUser> {
-  const octokit = await getGitHubClient(userId);
-
-  const response = await octokit.users.getAuthenticated();
-
-  return response.data as GitHubUser;
+  return githubProxyGet(userId, "/user");
 }
 
 /**
@@ -93,34 +83,40 @@ export async function listGitHubRepos(
     page?: number;
   },
 ): Promise<GitHubRepo[]> {
-  const octokit = await getGitHubClient(userId);
+  const params: Record<string, string | object | string[] | object[] | null> =
+    {};
 
-  const response = await octokit.repos.listForAuthenticatedUser({
-    visibility: options?.visibility || "all",
-    sort: options?.sort || "updated",
-    per_page: options?.perPage || 30,
-    page: options?.page || 1,
-  });
+  if (options?.visibility) {
+    params.visibility = options.visibility;
+  }
 
-  return response.data as GitHubRepo[];
+  if (options?.sort) {
+    params.sort = options.sort;
+  }
+
+  if (options?.perPage) {
+    params.per_page = String(options.perPage);
+  }
+
+  if (options?.page) {
+    params.page = String(options.page);
+  }
+
+  return githubProxyGet(userId, "/user/repos", params);
 }
 
 /**
- * Get a specific repository
+ * Get a specific GitHub repository
  */
 export async function getGitHubRepo(
   userId: string,
   owner: string,
   repo: string,
 ): Promise<GitHubRepo> {
-  const octokit = await getGitHubClient(userId);
-
-  const response = await octokit.repos.get({
-    owner,
-    repo,
-  });
-
-  return response.data as GitHubRepo;
+  return githubProxyGet(
+    userId,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
+  );
 }
 
 /**
@@ -133,46 +129,37 @@ export async function listGitHubPullRequests(
   options?: {
     state?: "open" | "closed" | "all";
     perPage?: number;
-    page?: number;
   },
 ): Promise<GitHubPullRequest[]> {
-  const octokit = await getGitHubClient(userId);
+  const params: Record<string, string | object | string[] | object[] | null> =
+    {};
 
-  const response = await octokit.pulls.list({
-    owner,
-    repo,
-    state: options?.state || "open",
-    per_page: options?.perPage || 30,
-    page: options?.page || 1,
-  });
+  if (options?.state) {
+    params.state = options.state;
+  }
 
-  return response.data as GitHubPullRequest[];
+  if (options?.perPage) {
+    params.per_page = String(options.perPage);
+  }
+
+  return githubProxyGet(
+    userId,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/pulls`,
+    params,
+  );
 }
 
 /**
- * Get user's recent activity summary
+ * Get a summary of user's GitHub activity
  */
-export async function getGitHubActivitySummary(userId: string) {
-  const [user, repos] = await Promise.all([
+export async function getGitHubActivitySummary(userId: string): Promise<{
+  user: GitHubUser;
+  recentRepos: GitHubRepo[];
+}> {
+  const [user, recentRepos] = await Promise.all([
     getGitHubUser(userId),
     listGitHubRepos(userId, { sort: "updated", perPage: 5 }),
   ]);
 
-  return {
-    user: {
-      login: user.login,
-      name: user.name,
-      avatar_url: user.avatar_url,
-      public_repos: user.public_repos,
-      followers: user.followers,
-    },
-    recentRepos: repos.map((repo) => ({
-      name: repo.name,
-      full_name: repo.full_name,
-      url: repo.html_url,
-      language: repo.language,
-      stars: repo.stargazers_count,
-      updated_at: repo.updated_at,
-    })),
-  };
+  return { user, recentRepos };
 }

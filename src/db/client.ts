@@ -1,18 +1,14 @@
-import { PrismaPg } from "@prisma/adapter-pg";
-import { attachDatabasePool } from "@vercel/functions";
-import { Pool } from "pg";
+import { PrismaNeon } from "@prisma/adapter-neon";
 import { PrismaClient } from "../generated/prisma";
 
-// Create connection pool
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-
-// Attach pool to Vercel Fluid for proper connection management
-attachDatabasePool(pool);
-
-// Create Prisma client with pg adapter
+// Create Prisma client with Neon adapter (following Vercel docs)
+// The Neon adapter handles connection pooling internally
 const createPrismaClient = () => {
+  const adapter = new PrismaNeon({
+    connectionString: process.env.DATABASE_URL,
+  });
   return new PrismaClient({
-    adapter: new PrismaPg(pool),
+    adapter,
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
   });
 };

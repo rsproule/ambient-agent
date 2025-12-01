@@ -43,8 +43,8 @@ export async function respondToMessage(
   // Conditionally merge integration tools only if user has connections
   const integrationTools = userHasConnections
     ? {
-        // ...createGmailTools(context), // Commented out for now
-        // ...createGitHubTools(context), // Commented out for now
+        ...createGmailTools(context),
+        ...createGitHubTools(context),
         ...createCalendarTools(context),
       }
     : {};
@@ -71,12 +71,14 @@ export async function respondToMessage(
 
   // Debug: Log all tool names and check their schemas
   console.log(`[${agent.name}] Tool list:`, Object.keys(allTools));
-  
+
   // Validate each tool schema in detail
   Object.entries(allTools).forEach(([name, tool], index) => {
     const toolObj = tool as { inputSchema?: unknown };
     if (!toolObj.inputSchema) {
-      console.error(`[${agent.name}] ❌ Tool ${index} (${name}) is missing 'inputSchema' field!`);
+      console.error(
+        `[${agent.name}] ❌ Tool ${index} (${name}) is missing 'inputSchema' field!`,
+      );
     } else {
       console.log(`[${agent.name}] ✅ Tool ${index} (${name}) has inputSchema`);
     }
@@ -85,7 +87,7 @@ export async function respondToMessage(
   // Combine context with agent's base instructions
   const systemPrompt = `${contextString}\n\n${agent.baseInstructions}`;
 
-  // Create ToolLoopAgent with structured output support and safeguards
+  // Create ToolLoopAgent with structured output support
   const loopAgent = new ToolLoopAgent({
     model: agent.model,
     ...(Object.keys(allTools).length > 0 ? { tools: allTools } : {}),
@@ -93,7 +95,6 @@ export async function respondToMessage(
     output: Output.object({
       schema: agent.schema,
     }),
-    maxSteps: 10, // Prevent infinite tool calling loops
   });
 
   // Debug: Try to inspect what's being sent to Anthropic
@@ -101,10 +102,11 @@ export async function respondToMessage(
     try {
       // Log the first tool's schema to see what's being generated
       const firstToolName = Object.keys(allTools)[0];
-      const firstTool = allTools[firstToolName];
+      const firstTool = allTools[firstToolName as keyof typeof allTools];
+      const toolObj = firstTool as { inputSchema?: unknown };
       console.log(`[${agent.name}] Inspecting first tool (${firstToolName}):`, {
-        hasInputSchema: !!firstTool.inputSchema,
-        inputSchemaType: typeof firstTool.inputSchema,
+        hasInputSchema: !!toolObj.inputSchema,
+        inputSchemaType: typeof toolObj.inputSchema,
       });
     } catch (e) {
       console.error(`[${agent.name}] Failed to inspect tool schema:`, e);

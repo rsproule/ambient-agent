@@ -3,14 +3,14 @@
  * GET /api/integrations/github?userId={userId}&action={user|repos|activity}
  */
 
-import { NextRequest, NextResponse } from "next/server";
 import {
-  getGitHubUser,
-  listGitHubRepos,
   getGitHubActivitySummary,
   getGitHubRepo,
+  getGitHubUser,
   listGitHubPullRequests,
+  listGitHubRepos,
 } from "@/src/lib/integrations/github";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   try {
@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     if (!userId) {
       return NextResponse.json(
         { error: "userId is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
         if (!owner || !repo) {
           return NextResponse.json(
             { error: "owner and repo are required" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         const repository = await getGitHubRepo(userId, owner, repo);
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
         if (!owner || !repo) {
           return NextResponse.json(
             { error: "owner and repo are required" },
-            { status: 400 }
+            { status: 400 },
           );
         }
         const state = (searchParams.get("state") || "open") as
@@ -82,20 +82,18 @@ export async function GET(request: NextRequest) {
       }
 
       default:
-        return NextResponse.json(
-          { error: "Invalid action" },
-          { status: 400 }
-        );
+        return NextResponse.json({ error: "Invalid action" }, { status: 400 });
     }
   } catch (error) {
     console.error("Error in GitHub integration:", error);
     return NextResponse.json(
       {
         error:
-          error instanceof Error ? error.message : "Failed to fetch GitHub data",
+          error instanceof Error
+            ? error.message
+            : "Failed to fetch GitHub data",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-

@@ -1,14 +1,15 @@
 /**
- * Next.js Middleware
- * 
+ * Next.js Proxy
+ *
  * Protects authenticated routes and handles redirects
+ * Note: Proxy always runs on Node.js runtime (no need to specify)
  */
 
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
 import { auth } from "@/src/lib/auth/config";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Protect /connections routes
@@ -29,7 +30,7 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Configure which routes to run middleware on
+// Configure which routes to run proxy on
 export const config = {
   matcher: [
     /*
@@ -43,4 +44,3 @@ export const config = {
     "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
-
