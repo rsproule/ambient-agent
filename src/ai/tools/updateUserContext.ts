@@ -1,55 +1,158 @@
-import { updateUserContext as updateUserContextDb } from "@/src/db/user";
+import { getUserByPhoneNumber, setOutboundOptIn } from "@/src/db/user";
+import {
+  updateUserContext as updateUserContextDb,
+  appendInterests,
+  getOrCreateUserContext,
+} from "@/src/db/userContext";
+import { queueConversationResearchJob } from "@/src/lib/research/createJob";
 import { tool, zodSchema } from "ai";
 import { z } from "zod";
 
 /**
- * Tool for updating user context and preferences
+ * Tool for updating user context
  *
  * Allows the agent to store information about a user including:
- * - User preferences and settings
- * - Custom context the user has shared
- * - Any other metadata that should be remembered
+ * - Professional info (company, role, projects)
+ * - Interests and topics they care about
+ * - Outbound messaging permission
+ *
+ * Can also trigger background research for important facts.
  */
 export const updateUserContextTool = tool({
   description:
-    "Update or store context and preferences for a specific user by their phone number. " +
-    "Use this to save information the user shares about themselves, their preferences, " +
-    "or any custom settings they want to configure. By default, this merges with existing " +
-    "data. Set replace=true to completely overwrite existing context.",
+    "Update or store context for a specific user by their phone number. " +
+    "Use this to save information the user shares about themselves. " +
+    "Can record outbound messaging permission (outboundOptIn). " +
+    "For important facts about the user (job changes, new interests), set storeAsFact=true " +
+    "to store it in the research system with semantic search.",
   inputSchema: zodSchema(
     z.object({
       phoneNumber: z
         .string()
         .describe("The user's phone number (E.164 format or email)"),
-      context: z
-        .object({})
-        .passthrough()
+      interests: z
+        .array(z.string())
+        .optional()
         .describe(
-          "The context data to store as a JSON object. Can include any properties like " +
-            "preferences, notes, custom fields, etc. Examples: {name: 'John', timezone: 'America/New_York', " +
-            "preferences: {notificationStyle: 'minimal'}}",
+          "Interests or topics the user cares about. These will be appended to existing interests.",
         ),
-      replace: z
+      professional: z
+        .object({
+          company: z.string().optional(),
+          role: z.string().optional(),
+          projects: z.array(z.string()).optional(),
+        })
+        .passthrough()
+        .optional()
+        .describe(
+          "Professional info about the user (company, role, projects, etc.)",
+        ),
+      outboundOptIn: z
+        .boolean()
+        .optional()
+        .describe(
+          "Set to true if user agrees to receive proactive messages (reminders, alerts, updates). " +
+            "Set to false if they decline. Only set this when user explicitly answers.",
+        ),
+      storeAsFact: z
         .boolean()
         .optional()
         .default(false)
         .describe(
-          "If true, completely replaces existing context. If false (default), merges with existing context.",
+          "If true, also stores this as a searchable fact in the research system. " +
+            "Use for important user info like job changes, new interests, etc.",
+        ),
+      factContent: z
+        .string()
+        .optional()
+        .describe(
+          "If storeAsFact is true, this is the fact text to store. " +
+            "Example: 'User works at OpenAI as a researcher'",
+        ),
+      invalidatesTopics: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Topics that this new information invalidates. " +
+            "Example: ['previous employment', 'Google job'] if user changed jobs.",
         ),
     }),
   ),
-  execute: async ({ phoneNumber, context, replace }) => {
+  execute: async ({
+    phoneNumber,
+    interests,
+    professional,
+    outboundOptIn,
+    storeAsFact,
+    factContent,
+    invalidatesTopics,
+  }) => {
     try {
-      const user = await updateUserContextDb(phoneNumber, context, replace);
+      // Get user to find their ID
+      const user = await getUserByPhoneNumber(phoneNumber);
+      if (!user) {
+        return {
+          success: false,
+          message: `User not found for phone number: ${phoneNumber}`,
+        };
+      }
+
+      // Update user context in the new system
+      const updates: {
+        interests?: string[];
+        professional?: Record<string, unknown>;
+      } = {};
+
+      if (interests && interests.length > 0) {
+        await appendInterests(user.id, interests);
+      }
+
+      if (professional) {
+        const existingContext = await getOrCreateUserContext(user.id);
+        updates.professional = {
+          ...(existingContext.professional || {}),
+          ...professional,
+        };
+        await updateUserContextDb(user.id, updates);
+      }
+
+      // Update outbound opt-in if provided
+      if (outboundOptIn !== undefined) {
+        await setOutboundOptIn(phoneNumber, outboundOptIn);
+      }
+
+      // Optionally store as a research fact
+      let researchJobId: string | undefined;
+      if (storeAsFact && factContent) {
+        const { jobId } = await queueConversationResearchJob({
+          userId: user.id,
+          content: factContent,
+          invalidates: invalidatesTopics,
+        });
+        researchJobId = jobId;
+      }
+
+      const messageParts = [`User context updated successfully for ${phoneNumber}.`];
+      if (interests && interests.length > 0) {
+        messageParts.push(`Added ${interests.length} interests.`);
+      }
+      if (professional) {
+        messageParts.push(`Updated professional info.`);
+      }
+      if (outboundOptIn !== undefined) {
+        messageParts.push(
+          `Outbound messaging: ${outboundOptIn ? "opted in" : "opted out"}.`,
+        );
+      }
+      if (researchJobId) {
+        messageParts.push(`Queued research job ${researchJobId}.`);
+      }
 
       return {
         success: true,
-        message:
-          `User context ${
-            replace ? "replaced" : "updated"
-          } successfully for ${phoneNumber}. ` +
-          `Stored ${Object.keys(context).length} properties.`,
-        updatedContext: user.metadata,
+        message: messageParts.join(" "),
+        outboundOptIn,
+        researchJobId,
       };
     } catch (error) {
       return {

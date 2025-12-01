@@ -59,7 +59,6 @@ export async function POST(request: Request) {
       phoneNumber: body.phoneNumber,
       name: body.name,
       email: body.email,
-      metadata: body.metadata,
     });
 
     console.log("User created:", {

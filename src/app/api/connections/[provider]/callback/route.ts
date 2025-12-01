@@ -3,11 +3,31 @@
  * GET /api/connections/{provider}/callback
  */
 
-import { upsertConnection } from "@/src/db/connection";
+import { getUserConnections, upsertConnection } from "@/src/db/connection";
+import { getUserById } from "@/src/db/user";
 import type { ConnectionProvider } from "@/src/generated/prisma";
 import { listUserAccounts } from "@/src/lib/pipedream/client";
 import { getProviderConfig } from "@/src/lib/pipedream/providers";
+import { queueOAuthResearchJob } from "@/src/lib/research/createJob";
 import { NextRequest, NextResponse } from "next/server";
+
+/**
+ * Map OAuth provider names to research provider types
+ */
+function mapProviderToResearchType(
+  provider: string,
+): "gmail" | "github" | "calendar" | null {
+  switch (provider) {
+    case "google_gmail":
+      return "gmail";
+    case "google_calendar":
+      return "calendar";
+    case "github":
+      return "github";
+    default:
+      return null;
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -160,6 +180,11 @@ export async function GET(
       | string
       | undefined;
 
+    // Check if this is the user's first connection (before storing new one)
+    const existingConnections = await getUserConnections(userId);
+    const isFirstConnection =
+      existingConnections.filter((c) => c.status === "connected").length === 0;
+
     // Store the connection in the database
     await upsertConnection({
       userId,
@@ -177,6 +202,35 @@ export async function GET(
         error: account.error,
       },
     });
+
+    // Trigger background research job
+    try {
+      // Get user info for web search context
+      const user = await getUserById(userId);
+
+      // Map provider name to research provider type
+      const researchProvider = mapProviderToResearchType(provider);
+
+      if (researchProvider) {
+        console.log(
+          `[Callback] Triggering research job for ${provider} (isFirst: ${isFirstConnection})`,
+        );
+
+        await queueOAuthResearchJob({
+          userId,
+          provider: researchProvider,
+          isFirstConnection,
+          userEmail: account.name, // Pipedream returns email as account name
+          userName: user?.name || undefined,
+        });
+      }
+    } catch (researchError) {
+      // Don't fail the OAuth flow if research job fails
+      console.error(
+        "[Callback] Failed to trigger research job:",
+        researchError,
+      );
+    }
 
     // Redirect back to connections page with success
     return NextResponse.redirect(

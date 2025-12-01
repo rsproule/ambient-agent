@@ -8,3 +8,5 @@
 export * from "./tasks/debouncedResponse";
 export * from "./tasks/handleMessage";
 export * from "./tasks/processMessages";
+export * from "./tasks/runResearchJob";
+export * from "./tasks/notifyUserOfResearch";

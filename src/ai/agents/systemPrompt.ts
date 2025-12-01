@@ -91,6 +91,36 @@ IMPORTANT: Always extract the actual message_id from the [msg_id: ...] prefix. N
 `.trim();
 
 /**
+ * User context from research system
+ */
+export interface UserResearchContext {
+  summary?: string | null;
+  interests?: string[];
+  professional?: Record<string, unknown> | null;
+  facts?: unknown[] | null;
+  recentDocuments?: Array<{
+    title: string;
+    source: string;
+    content?: string;
+  }>;
+}
+
+/**
+ * System state for contextual prompts
+ */
+export interface SystemState {
+  connections: {
+    gmail: boolean;
+    github: boolean;
+    calendar: boolean;
+  };
+  hasAnyConnection: boolean;
+  connectionLink?: string; // URL to connect accounts
+  researchStatus?: "none" | "pending" | "completed";
+  outboundOptIn?: boolean | null; // null = not asked, true = opted in, false = opted out
+}
+
+/**
  * Build conversation context information
  * This describes the type of conversation and provides relevant context
  */
@@ -98,14 +128,13 @@ export function buildConversationContextPrompt(context: {
   conversationId: string;
   isGroup: boolean;
   summary?: string;
+  userContext?: UserResearchContext | null;
+  systemState?: SystemState | null;
 }): string {
   const parts: string[] = [];
 
-  // Conversation identifier (important for tools that need conversationId)
+  // Conversation identifier
   parts.push(`CURRENT CONVERSATION ID: ${context.conversationId}`);
-  parts.push(
-    "- Use this conversationId when calling tools like getConversationConfig or updateConversationConfig",
-  );
   parts.push("");
 
   // Conversation type
@@ -131,11 +160,107 @@ export function buildConversationContextPrompt(context: {
     parts.push("- You can be more conversational and use multiple messages");
   }
 
-  // Summary (if available)
+  // Conversation summary (if available)
   if (context.summary) {
     parts.push("");
     parts.push("CONVERSATION SUMMARY:");
     parts.push(context.summary);
+  }
+
+  // User research context (if available)
+  if (context.userContext) {
+    parts.push("");
+    parts.push("USER CONTEXT (from research):");
+    parts.push(
+      "- This is background information you've learned about the user",
+    );
+    parts.push("- Use it to personalize your responses and be more helpful");
+    parts.push("");
+
+    if (context.userContext.summary) {
+      parts.push(`Summary: ${context.userContext.summary}`);
+    }
+
+    if (
+      context.userContext.interests &&
+      context.userContext.interests.length > 0
+    ) {
+      parts.push(`Interests: ${context.userContext.interests.join(", ")}`);
+    }
+
+    if (context.userContext.professional) {
+      const prof = context.userContext.professional;
+      const profParts: string[] = [];
+      if (prof.github) {
+        const gh = prof.github as Record<string, string>;
+        if (gh.company) profParts.push(`Works at ${gh.company}`);
+        if (gh.role) profParts.push(`Role: ${gh.role}`);
+        if (gh.username) profParts.push(`GitHub: @${gh.username}`);
+      }
+      if (profParts.length > 0) {
+        parts.push(`Professional: ${profParts.join(", ")}`);
+      }
+    }
+
+    if (
+      context.userContext.recentDocuments &&
+      context.userContext.recentDocuments.length > 0
+    ) {
+      parts.push("");
+      parts.push("Recent research findings:");
+      for (const doc of context.userContext.recentDocuments.slice(0, 3)) {
+        parts.push(`- ${doc.title} (${doc.source})`);
+      }
+    }
+  }
+
+  // System state (connections, etc.)
+  if (context.systemState) {
+    parts.push("");
+    parts.push("SYSTEM STATE:");
+
+    if (!context.systemState.hasAnyConnection) {
+      // No connections at all - this is the key moment to prompt
+      parts.push("⚠️ USER HAS NO CONNECTED ACCOUNTS");
+      parts.push(
+        "- The user hasn't connected any accounts (Gmail, GitHub, Calendar)",
+      );
+      parts.push(
+        "- You can do much more if they connect - research them, check emails, manage calendar, etc.",
+      );
+      parts.push(
+        "- Use the generateConnectionLink tool to get them a link to connect",
+      );
+      parts.push(
+        "- Suggest connecting naturally when relevant (don't be pushy, but do mention it)",
+      );
+    } else {
+      // Has some connections - just note what's available, don't nag about missing ones
+      const connected: string[] = [];
+      if (context.systemState.connections.gmail) connected.push("Gmail");
+      if (context.systemState.connections.github) connected.push("GitHub");
+      if (context.systemState.connections.calendar) connected.push("Calendar");
+
+      parts.push(`Connected accounts: ${connected.join(", ")}`);
+    }
+
+    // Research status - only mention if pending
+    if (context.systemState.researchStatus === "pending") {
+      parts.push("Research: In progress (will notify when done)");
+    }
+
+    // Outbound messaging permission - only mention if not yet asked
+    if (
+      context.systemState.outboundOptIn === null ||
+      context.systemState.outboundOptIn === undefined
+    ) {
+      parts.push("");
+      parts.push("OUTBOUND PERMISSION: Not yet asked");
+      parts.push("- You don't have permission to send proactive messages yet");
+      parts.push(
+        "- When relevant, ask if they'd like proactive updates (reminders, alerts, etc)",
+      );
+    }
   }
 
   return parts.join("\n");
