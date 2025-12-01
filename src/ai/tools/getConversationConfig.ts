@@ -1,11 +1,11 @@
-import { tool, zodSchema } from "ai";
-import { z } from "zod";
 import { getPrioritizationConfig } from "@/src/db/prioritization";
 import { DEFAULT_CONFIG } from "@/src/services/prioritization";
+import { tool, zodSchema } from "ai";
+import { z } from "zod";
 
 /**
  * Tool for fetching current conversation prioritization config
- * 
+ *
  * Allows the agent to check current settings for the conversation
  * so they can summarize them for the user.
  */
@@ -50,16 +50,21 @@ export const getConversationConfigTool = tool({
           isEnabled: config.isEnabled,
         },
         isDefault: false,
-        message: `Custom configuration active: $${config.minimumNotifyPrice} minimum threshold, ${
-          config.customValuePrompt ? "custom value prompt set" : "using default value prompt"
+        message: `Custom configuration active: $${
+          config.minimumNotifyPrice
+        } minimum threshold, ${
+          config.customValuePrompt
+            ? "custom value prompt set"
+            : "using default value prompt"
         }, prioritization ${config.isEnabled ? "enabled" : "disabled"}.`,
       };
     } catch (error) {
       return {
         success: false,
-        message: `Failed to get config: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Failed to get config: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       };
     }
   },
 });
-
