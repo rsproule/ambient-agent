@@ -1,8 +1,8 @@
-import { perplexity } from "@ai-sdk/perplexity"
-import { tool, generateObject, UIToolInvocation, zodSchema } from "ai"
-import { z } from "zod"
+import { perplexity } from "@ai-sdk/perplexity";
+import { generateObject, tool, UIToolInvocation, zodSchema } from "ai";
+import { z } from "zod";
 
-import { WebSearchSchema, WebSearchResult } from "./schema"
+import { WebSearchResult, WebSearchSchema } from "./schema";
 
 export const webSearchPerplexityTool = tool({
   description:
@@ -10,7 +10,12 @@ export const webSearchPerplexityTool = tool({
   inputSchema: zodSchema(
     z.object({
       query: z.string().min(1).describe("The search query"),
-      limit: z.number().min(1).max(20).default(5).describe("Number of results (default: 5, max: 20)"),
+      limit: z
+        .number()
+        .min(1)
+        .max(20)
+        .default(5)
+        .describe("Number of results (default: 5, max: 20)"),
     }),
   ),
   execute: async ({ query, limit }) => {
@@ -22,27 +27,27 @@ export const webSearchPerplexityTool = tool({
       system:
         "You are a search assistant. Return strictly the JSON schema provided. For each result include title, url, a short snippet, and a source hostname.",
       prompt: `Search the web for: ${query}. Return up to ${limit} high-quality, diverse results with proper URLs.`,
-    })
+    });
 
     // Ensure limit is respected in case the model over-returns
     const normalized: WebSearchResult = {
       query,
       results: (object.results || []).slice(0, limit).map((r) => {
-        let source = r.source
+        let source = r.source;
         if (!source) {
           try {
-            source = new URL(r.url).hostname
+            source = new URL(r.url).hostname;
           } catch {
-            source = undefined
+            source = undefined;
           }
         }
-        return { title: r.title, url: r.url, snippet: r.snippet, source }
+        return { title: r.title, url: r.url, snippet: r.snippet, source };
       }),
-    }
-    return normalized
+    };
+    return normalized;
   },
-})
+});
 
 export type WebSearchToolInvocation = UIToolInvocation<
   typeof webSearchPerplexityTool
->
+>;

@@ -1,17 +1,17 @@
-import { tool, zodSchema } from "ai";
-import { z } from "zod";
 import { generateMagicLinkUrl } from "@/src/db/magicLink";
 import { env } from "@/src/lib/config/env";
+import { tool, zodSchema } from "ai";
+import { z } from "zod";
 
 /**
  * Tool for generating a magic link to manage account connections
- * 
+ *
  * Creates a one-time, time-limited link that allows the user to:
  * - Connect their Gmail account
  * - Connect their Google Calendar
  * - Connect their GitHub account
  * - Manage existing connections
- * 
+ *
  * The link expires in 1 hour and can only be used once.
  */
 export const generateConnectionLinkTool = tool({
@@ -50,9 +50,10 @@ export const generateConnectionLinkTool = tool({
     } catch (error) {
       return {
         success: false,
-        message: `Failed to generate connection link: ${error instanceof Error ? error.message : "Unknown error"}`,
+        message: `Failed to generate connection link: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`,
       };
     }
   },
 });
-
