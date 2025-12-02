@@ -109,20 +109,8 @@ export const debouncedResponse = task({
         };
       }
 
-      // For new users, attach the vCard to the first message action
-      if (payload.isNewUser && payload.vcardUrl && actions.length > 0) {
-        const firstMessageAction = actions.find((a) => a.type === "message");
-        if (firstMessageAction && firstMessageAction.type === "message") {
-          // Add vCard to attachments (create array if doesn't exist)
-          firstMessageAction.attachments = [
-            payload.vcardUrl,
-            ...(firstMessageAction.attachments || []),
-          ];
-          console.log(
-            `Attached vCard to first message for new user: ${payload.vcardUrl}`,
-          );
-        }
-      }
+      // Note: vCard attachments are not supported by LoopMessage (only images)
+      // The contact card info is included in the onboarding prompt instead
 
       // Execute the actions via the existing handleMessageResponse
       await handleMessageResponse.triggerAndWait({

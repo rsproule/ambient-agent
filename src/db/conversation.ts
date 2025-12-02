@@ -343,9 +343,6 @@ export async function getConversationMessages(
           }
         }
 
-        // Check if this is the first message (only 1 message in conversation)
-        const isFirstMessage = messages.length === 1;
-
         systemState = {
           currentTime: getCurrentTimeInfo(
             userTimezone || "America/Los_Angeles",
@@ -361,7 +358,6 @@ export async function getConversationMessages(
           outboundOptIn: user.outboundOptIn,
           timezoneSource: userTimezone ? "known" : "default",
           isOnboarding: !user.hasCompletedOnboarding,
-          isFirstMessage: isFirstMessage && !user.hasCompletedOnboarding,
         };
       }
     } catch (error) {

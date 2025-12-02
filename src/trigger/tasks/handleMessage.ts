@@ -74,6 +74,33 @@ export const handleMessageResponse = task({
   },
 });
 
+/**
+ * Validate and filter attachments for LoopMessage
+ * - Must be HTTPS URLs
+ * - Max 256 characters
+ * - Max 3 attachments
+ */
+function filterValidAttachments(attachments?: string[]): string[] | undefined {
+  if (!attachments || attachments.length === 0) return undefined;
+  
+  const valid = attachments
+    .filter((url) => {
+      if (!url || typeof url !== "string") return false;
+      if (!url.startsWith("https://")) {
+        console.warn(`[handleMessage] Skipping non-HTTPS attachment: ${url}`);
+        return false;
+      }
+      if (url.length > 256) {
+        console.warn(`[handleMessage] Skipping attachment URL > 256 chars`);
+        return false;
+      }
+      return true;
+    })
+    .slice(0, 3); // Max 3 attachments
+  
+  return valid.length > 0 ? valid : undefined;
+}
+
 async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
@@ -97,13 +124,16 @@ async function executeAction(
 
   switch (action.type) {
     case "message":
+      // Filter attachments to only valid HTTPS URLs
+      const validAttachments = filterValidAttachments(action.attachments);
+      
       // Use appropriate method based on what's being sent
       if (action.reply_to_id) {
         await client.sendReply({
           ...baseParams,
           text: action.text,
           reply_to_id: action.reply_to_id,
-          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
+          ...(validAttachments && { attachments: validAttachments }),
           effect: action.effect,
           subject: action.subject,
         });
@@ -112,14 +142,14 @@ async function executeAction(
           ...baseParams,
           text: action.text,
           effect: action.effect,
-          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
+          ...(validAttachments && { attachments: validAttachments }),
           subject: action.subject,
         });
       } else {
         await client.sendLoopMessage({
           ...baseParams,
           text: action.text,
-          ...(action.attachments && action.attachments.length > 0 && { attachments: action.attachments }),
+          ...(validAttachments && { attachments: validAttachments }),
           subject: action.subject,
         });
       }
