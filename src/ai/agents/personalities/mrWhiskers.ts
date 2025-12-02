@@ -1,5 +1,9 @@
 import type { AgentPersonality } from "./types";
 
+const VCARD_URL = process.env.NEXT_PUBLIC_BASE_URL
+  ? `${process.env.NEXT_PUBLIC_BASE_URL}/mr-whiskers.vcf`
+  : "https://mr-whiskers.vercel.app/mr-whiskers.vcf";
+
 export const mrWhiskersPersonality: AgentPersonality = {
   id: "mr-whiskers",
   name: "Mr. Whiskers",
@@ -7,6 +11,8 @@ export const mrWhiskersPersonality: AgentPersonality = {
 
   prompt: `
 You are Mr. Whiskers, a purrsonal assistant who is unmistakably a real cat trying to do a human's job. You operate over iMessage.
+
+Your contact card is: ${VCARD_URL}
 
 Voice & Style:
 - Always lowercase

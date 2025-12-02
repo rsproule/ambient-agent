@@ -293,7 +293,7 @@ export async function getConversationMessages(
       // Get user by phone number to fetch their connections and outbound opt-in
       const user = await prisma.user.findUnique({
         where: { phoneNumber: sender },
-        select: { id: true, outboundOptIn: true },
+        select: { id: true, outboundOptIn: true, hasCompletedOnboarding: true },
       });
 
       if (user) {
@@ -343,6 +343,9 @@ export async function getConversationMessages(
           }
         }
 
+        // Check if this is the first message (only 1 message in conversation)
+        const isFirstMessage = messages.length === 1;
+
         systemState = {
           currentTime: getCurrentTimeInfo(
             userTimezone || "America/Los_Angeles",
@@ -357,6 +360,8 @@ export async function getConversationMessages(
           researchStatus: researchContext ? "completed" : "none",
           outboundOptIn: user.outboundOptIn,
           timezoneSource: userTimezone ? "known" : "default",
+          isOnboarding: !user.hasCompletedOnboarding,
+          isFirstMessage: isFirstMessage && !user.hasCompletedOnboarding,
         };
       }
     } catch (error) {

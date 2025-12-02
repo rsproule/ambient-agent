@@ -13,6 +13,8 @@ type DebouncedResponsePayload = {
   recipient?: string; // for 1:1 chats
   group?: string; // for group chats
   timestampWhenTriggered: string; // ISO string of when this task was triggered
+  isNewUser?: boolean; // whether this is a brand new user (for onboarding)
+  vcardUrl?: string; // URL to vCard to attach for new users
 };
 
 export const debouncedResponse = task({
@@ -105,6 +107,21 @@ export const debouncedResponse = task({
           actionsExecuted: 0,
           noResponseNeeded: true,
         };
+      }
+
+      // For new users, attach the vCard to the first message action
+      if (payload.isNewUser && payload.vcardUrl && actions.length > 0) {
+        const firstMessageAction = actions.find((a) => a.type === "message");
+        if (firstMessageAction && firstMessageAction.type === "message") {
+          // Add vCard to attachments (create array if doesn't exist)
+          firstMessageAction.attachments = [
+            payload.vcardUrl,
+            ...(firstMessageAction.attachments || []),
+          ];
+          console.log(
+            `Attached vCard to first message for new user: ${payload.vcardUrl}`,
+          );
+        }
       }
 
       // Execute the actions via the existing handleMessageResponse

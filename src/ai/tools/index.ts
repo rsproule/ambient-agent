@@ -10,6 +10,7 @@
  * - Create and manage scheduled jobs
  */
 
+export { completeOnboardingTool } from "./completeOnboarding";
 export { createImageTool } from "./createImage";
 export { generateConnectionLinkTool } from "./generateConnectionLink";
 export { getUserContextTool } from "./getUserContext";
