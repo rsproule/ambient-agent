@@ -33,7 +33,7 @@ export const generateConnectionLinkTool = tool({
       const baseUrl =
         env.NEXT_PUBLIC_APP_URL ||
         process.env.NEXT_PUBLIC_BASE_URL ||
-        "https://mr-whiskers.vercel.app";
+        "https://mrwhiskers.chat";
 
       // Generate the magic link
       const magicLinkUrl = await generateMagicLinkUrl(phoneNumber, baseUrl);
