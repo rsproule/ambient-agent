@@ -32,8 +32,8 @@ export const generateConnectionLinkTool = tool({
       // Get the base URL from environment or default to localhost
       const baseUrl =
         env.NEXT_PUBLIC_APP_URL ||
-        process.env.NEXT_PUBLIC_APP_URL ||
-        "http://localhost:3000";
+        process.env.NEXT_PUBLIC_BASE_URL ||
+        "https://mr-whiskers.vercel.app";
 
       // Generate the magic link
       const magicLinkUrl = await generateMagicLinkUrl(phoneNumber, baseUrl);
