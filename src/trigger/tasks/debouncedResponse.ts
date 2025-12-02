@@ -14,7 +14,6 @@ type DebouncedResponsePayload = {
   group?: string; // for group chats
   timestampWhenTriggered: string; // ISO string of when this task was triggered
   isNewUser?: boolean; // whether this is a brand new user (for onboarding)
-  vcardUrl?: string; // URL to vCard to attach for new users
 };
 
 export const debouncedResponse = task({
@@ -108,9 +107,6 @@ export const debouncedResponse = task({
           noResponseNeeded: true,
         };
       }
-
-      // Note: vCard attachments are not supported by LoopMessage (only images)
-      // The contact card info is included in the onboarding prompt instead
 
       // Execute the actions via the existing handleMessageResponse
       await handleMessageResponse.triggerAndWait({

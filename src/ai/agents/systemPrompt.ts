@@ -297,7 +297,7 @@ export function buildConversationContextPrompt(context: {
     parts.push("SYSTEM STATE:");
 
     if (!context.systemState.hasAnyConnection) {
-      // No connections at all - this is the key moment to prompt
+      // No connections at all - aggressively push connection link
       parts.push("⚠️ USER HAS NO CONNECTED ACCOUNTS");
       parts.push(
         "- The user hasn't connected any accounts (Gmail, GitHub, Calendar)",
@@ -305,12 +305,11 @@ export function buildConversationContextPrompt(context: {
       parts.push(
         "- You can do much more if they connect - research them, check emails, manage calendar, etc.",
       );
-      parts.push(
-        "- Use the generateConnectionLink tool to get them a link to connect",
-      );
-      parts.push(
-        "- Suggest connecting naturally when relevant (don't be pushy, but do mention it)",
-      );
+      parts.push("");
+      parts.push("🚨 MANDATORY: If this is NOT the first message in the conversation:");
+      parts.push("- You MUST call generateConnectionLink and include the link in your response");
+      parts.push("- Do this EVERY response until they connect");
+      parts.push("- Work it naturally into the conversation but always include it");
     } else {
       // Has some connections - just note what's available, don't nag about missing ones
       const connected: string[] = [];
