@@ -38,11 +38,10 @@ export default function LoginPage() {
             href="/connections"
             className="text-[#2c2c2c] underline underline-offset-2 hover:text-black"
           >
-            Manage my connections
+            Manage connections
           </Link>
         </p>
       </div>
     </main>
   );
 }
-
