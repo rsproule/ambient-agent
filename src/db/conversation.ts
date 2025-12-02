@@ -1,4 +1,5 @@
 import type {
+  GroupParticipantInfo,
   SystemState,
   UserResearchContext,
 } from "@/src/ai/agents/systemPrompt";
@@ -60,6 +61,7 @@ export interface ConversationContext {
   sender?: string; // Phone number of the user who sent the last message (for tool auth)
   userContext?: UserResearchContext | null; // Research-based user context
   systemState?: SystemState | null; // Connection status and other system state
+  groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
 }
 
 /**
@@ -287,6 +289,40 @@ export async function getConversationMessages(
   // Fetch user research context and system state for direct messages
   let userContext: UserResearchContext | null = null;
   let systemState: SystemState | null = null;
+  let groupParticipants: GroupParticipantInfo[] | null = null;
+
+  // For group chats, look up participant identities
+  if (conversation.isGroup && conversation.participants.length > 0) {
+    try {
+      groupParticipants = await Promise.all(
+        conversation.participants.map(async (phoneNumber) => {
+          const participantContext = await getUserContextByPhone(phoneNumber);
+          const user = await prisma.user.findUnique({
+            where: { phoneNumber },
+            select: { name: true },
+          });
+
+          // Extract first sentence of summary as brief description
+          let brief: string | undefined;
+          if (participantContext?.summary) {
+            const firstSentence = participantContext.summary.split(/[.!?]/)[0];
+            brief = firstSentence ? firstSentence.trim() : undefined;
+          }
+
+          return {
+            phoneNumber,
+            name: user?.name ?? undefined,
+            brief,
+          };
+        }),
+      );
+    } catch (error) {
+      console.warn(
+        `[getConversationMessages] Failed to fetch group participant info:`,
+        error,
+      );
+    }
+  }
 
   if (!conversation.isGroup && sender) {
     try {
@@ -388,6 +424,7 @@ export async function getConversationMessages(
       sender,
       userContext,
       systemState,
+      groupParticipants,
     },
   };
 }

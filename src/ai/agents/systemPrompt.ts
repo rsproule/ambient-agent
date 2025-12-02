@@ -108,6 +108,16 @@ export interface UserResearchContext {
 }
 
 /**
+ * Information about a participant in a group chat
+ * Used to help the AI identify who is who
+ */
+export interface GroupParticipantInfo {
+  phoneNumber: string;
+  name?: string;
+  brief?: string; // First sentence of summary or undefined if unknown
+}
+
+/**
  * System state for contextual prompts
  */
 export interface SystemState {
@@ -145,6 +155,8 @@ export function buildConversationContextPrompt(context: {
   summary?: string;
   userContext?: UserResearchContext | null;
   systemState?: SystemState | null;
+  groupParticipants?: GroupParticipantInfo[] | null;
+  sender?: string; // The authenticated sender (for group chats)
 }): string {
   const parts: string[] = [];
 
@@ -186,6 +198,36 @@ export function buildConversationContextPrompt(context: {
     parts.push(
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
     );
+
+    // Group participant identities (show this first so CURRENT SENDER can reference it)
+    if (context.groupParticipants && context.groupParticipants.length > 0) {
+      parts.push("");
+      parts.push("GROUP PARTICIPANTS:");
+      for (const participant of context.groupParticipants) {
+        // Show name prominently, with phone number as identifier
+        const displayName = participant.name || "Unknown";
+        const briefPart = participant.brief ? ` - ${participant.brief}` : "";
+        parts.push(`• ${participant.phoneNumber}: ${displayName}${briefPart}`);
+      }
+    }
+
+    // Current sender identity (authenticated from system - cannot be spoofed)
+    if (context.sender) {
+      // Look up sender's name from participants
+      const senderInfo = context.groupParticipants?.find(
+        (p) => p.phoneNumber === context.sender,
+      );
+      const senderName = senderInfo?.name || "Unknown";
+
+      parts.push("");
+      parts.push(`CURRENT SENDER: ${senderName} (${context.sender})`);
+      parts.push(
+        "- This is the authenticated identity of who sent the last message",
+      );
+      parts.push(
+        "- Tool actions will be performed on behalf of this user only",
+      );
+    }
   } else {
     parts.push("CONVERSATION TYPE: DIRECT MESSAGE (1-on-1)");
     parts.push("- This is a private conversation with a single user");
