@@ -17,8 +17,8 @@ import { createAgent } from "./factory";
 import { mrWhiskersPersonality } from "./personalities";
 
 const anthropic = createAnthropic({
-  // apiKey: process.env.ECHO_API_KEY,
-  // baseURL: "https://echo.router.merit.systems",
+  apiKey: process.env.ECHO_API_KEY,
+  baseURL: "https://echo.router.merit.systems",
 });
 
 export const mrWhiskersAgent = createAgent({
