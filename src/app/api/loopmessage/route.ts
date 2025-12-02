@@ -1,6 +1,5 @@
 import { saveUserMessage } from "@/src/db/conversation";
 import { upsertUser, upsertUsers } from "@/src/db/user";
-import { env } from "@/src/lib/config/env";
 import type {
   LoopWebhook,
   MessageInboundWebhook,
@@ -13,11 +12,6 @@ import {
 import { debouncedResponse } from "@/src/trigger/tasks/debouncedResponse";
 import { NextResponse } from "next/server";
 
-// Get vCard URL from environment
-const BASE_URL =
-  env.NEXT_PUBLIC_BASE_URL ||
-  "http://localhost:3000";
-const VCARD_URL = `${BASE_URL}/mr-whiskers.vcf`;
 
 export async function POST(request: Request) {
   try {
@@ -114,15 +108,12 @@ async function inboundMessageHandler(
   );
 
   // Trigger debounced response task with the message timestamp
-  // Include onboarding data for DMs with new users
   await debouncedResponse.trigger({
     conversationId,
     recipient: webhook.recipient,
     group: webhook.group?.group_id,
     timestampWhenTriggered: savedMessage.createdAt.toISOString(),
-    // Onboarding: attach vCard for new users
     isNewUser: isNewUser && !isGroup,
-    vcardUrl: isNewUser && !isGroup ? VCARD_URL : undefined,
   });
 
   return {
