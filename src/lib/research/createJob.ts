@@ -1,8 +1,10 @@
+import { getConnection } from "@/src/db/connection";
 import {
   createResearchJob,
   type CreateResearchJobInput,
   type ResearchTask,
 } from "@/src/db/researchJob";
+import { getUserById } from "@/src/db/user";
 import { runResearchJob } from "@/src/trigger/tasks/runResearchJob";
 
 /**
@@ -153,4 +155,151 @@ export async function queueManualResearchJob(params: {
     tasks,
     notify: true,
   });
+}
+
+// Provider to connection provider mapping
+const PROVIDER_TO_CONNECTION: Record<
+  "gmail" | "github" | "calendar",
+  "google_gmail" | "github" | "google_calendar"
+> = {
+  gmail: "google_gmail",
+  github: "github",
+  calendar: "google_calendar",
+};
+
+/**
+ * Create a comprehensive research job that includes ALL connected providers
+ * and web search. This always re-runs research on all providers to keep
+ * user context fresh and up-to-date.
+ *
+ * By default, this runs every 8 hours via the proactive scheduler.
+ */
+export async function queueComprehensiveResearchJob(params: {
+  userId: string;
+  webSearchQueries?: string[];
+  /** Trigger type for the job (default: "manual") */
+  triggerType?: "manual" | "scheduled";
+  /** Whether to notify the user when complete (default: true for manual, false for scheduled) */
+  notify?: boolean;
+}): Promise<{
+  jobId: string;
+  handle: unknown;
+  analyzingProviders: ("gmail" | "github" | "calendar")[];
+  includingWebSearch: boolean;
+}> {
+  const { userId, webSearchQueries, triggerType = "manual" } = params;
+  // Default: notify for manual triggers, don't notify for scheduled (too noisy)
+  const shouldNotify = params.notify ?? triggerType === "manual";
+
+  const tasks: ResearchTask[] = [];
+  const analyzingProviders: ("gmail" | "github" | "calendar")[] = [];
+
+  // Always analyze ALL connected providers (no skipping)
+  const allProviders: ("gmail" | "github" | "calendar")[] = [
+    "gmail",
+    "github",
+    "calendar",
+  ];
+
+  for (const provider of allProviders) {
+    // Check if provider is connected
+    const connectionProvider = PROVIDER_TO_CONNECTION[provider];
+    const connection = await getConnection(userId, connectionProvider).catch(
+      () => null,
+    );
+
+    if (connection?.status === "connected") {
+      tasks.push({ type: "analyze_provider", provider });
+      analyzingProviders.push(provider);
+      console.log(`[ComprehensiveResearch] Will analyze ${provider}`);
+    }
+  }
+
+  // Always include web search
+  let includingWebSearch = false;
+
+  if (webSearchQueries && webSearchQueries.length > 0) {
+    // Use user-provided queries if given
+    tasks.push({ type: "web_search", queries: webSearchQueries });
+    includingWebSearch = true;
+  } else {
+    // Generate queries from user context for web search
+    const user = await getUserById(userId);
+    if (user) {
+      // Build search queries from available user info
+      const queries: string[] = [];
+
+      if (user.name) {
+        queries.push(user.name);
+        queries.push(`"${user.name}" professional`);
+        queries.push(`${user.name} LinkedIn`);
+      }
+
+      if (user.email) {
+        const domain = user.email.split("@")[1];
+        const personalDomains = [
+          "gmail.com",
+          "yahoo.com",
+          "hotmail.com",
+          "outlook.com",
+          "icloud.com",
+          "me.com",
+        ];
+        if (domain && !personalDomains.includes(domain)) {
+          queries.push(`${domain} company`);
+          if (user.name) {
+            queries.push(`${user.name} ${domain}`);
+          }
+        }
+      }
+
+      if (queries.length > 0) {
+        tasks.push({ type: "web_search", queries });
+        includingWebSearch = true;
+      }
+    }
+  }
+
+  // Add deep person research at the end if we have any providers or can search
+  if (analyzingProviders.length > 0 || includingWebSearch) {
+    const user = await getUserById(userId);
+    if (user?.name || user?.email) {
+      tasks.push({
+        type: "deep_person_research",
+        name: user.name ?? undefined,
+        email: user.email ?? undefined,
+      });
+    }
+  }
+
+  if (tasks.length === 0) {
+    throw new Error(
+      "No connected accounts found and no search queries provided. " +
+        "Connect at least one account or provide specific search queries.",
+    );
+  }
+
+  console.log(
+    `[ComprehensiveResearch] Starting ${triggerType} job with ${tasks.length} tasks`,
+    { analyzingProviders, includingWebSearch, notify: shouldNotify },
+  );
+
+  const result = await queueResearchJob({
+    targetType: "user",
+    targetId: userId,
+    trigger: {
+      type: triggerType,
+      metadata: { comprehensive: true },
+    },
+    tasks,
+    notify: shouldNotify,
+    // For scheduled jobs, only notify if significant findings
+    notifyOnlyIfSignificant: triggerType === "scheduled",
+  });
+
+  return {
+    ...result,
+    analyzingProviders,
+    includingWebSearch,
+  };
 }

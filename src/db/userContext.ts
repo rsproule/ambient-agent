@@ -273,6 +273,26 @@ export async function getContextDocuments(
 }
 
 /**
+ * Get distinct sources that have been researched for a user
+ * Returns sources like "gmail", "github", "calendar", "web" that have non-stale documents
+ */
+export async function getResearchedSources(userId: string): Promise<string[]> {
+  const context = await getUserContext(userId);
+  if (!context) return [];
+
+  const sources = await prisma.contextDocument.findMany({
+    where: {
+      contextId: context.id,
+      isStale: false,
+    },
+    distinct: ["source"],
+    select: { source: true },
+  });
+
+  return sources.map((s) => s.source);
+}
+
+/**
  * Mark documents as stale by source
  */
 export async function markDocumentsStale(

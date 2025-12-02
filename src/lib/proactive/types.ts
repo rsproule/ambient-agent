@@ -10,7 +10,8 @@ export type HookName =
   | "github"
   | "gmail"
   | "connectionReminder"
-  | "scheduledJobs";
+  | "scheduledJobs"
+  | "deepResearch";
 
 /**
  * Result from a proactive hook check
@@ -65,6 +66,8 @@ export interface HookScheduleConfig {
   connectionReminder: number;
   /** Check scheduled jobs every N minutes (default: 15 - matches cron) */
   scheduledJobs: number;
+  /** Run deep research every N minutes (default: 480 = 8 hours) */
+  deepResearch: number;
 }
 
 /**
@@ -76,6 +79,7 @@ export const DEFAULT_HOOK_SCHEDULES: HookScheduleConfig = {
   gmail: 120, // Every 2 hours - don't spam about emails
   connectionReminder: 10080, // Once a week (7 * 24 * 60)
   scheduledJobs: 15, // Every 15 min - matches the cron frequency
+  deepResearch: 480, // Every 8 hours - keeps user context fresh
 };
 
 /**

@@ -14,6 +14,7 @@ import type { Prisma } from "@/src/generated/prisma";
 import {
   checkCalendar,
   checkConnectionReminder,
+  checkDeepResearch,
   checkGitHub,
   checkGmail,
   checkScheduledJobs,
@@ -35,6 +36,57 @@ type ProactiveUserCheckPayload = {
 
 type HookLastRunTimes = Partial<Record<HookName, string>>; // ISO date strings
 type HookCooldowns = Partial<Record<HookName, number>>; // minutes
+
+/**
+ * Hook definition for dynamic dispatch
+ */
+interface HookDefinition {
+  name: HookName;
+  /** Lower number = higher priority (runs first) */
+  priority: number;
+  /** Execute the hook */
+  execute: (context: HookContext) => Promise<HookResult>;
+}
+
+/**
+ * Registry of all proactive hooks
+ * Sorted by priority (lower = runs first)
+ */
+const HOOK_REGISTRY: HookDefinition[] = (
+  [
+    {
+      name: "scheduledJobs" as const,
+      priority: 1, // Highest - user explicitly requested these
+      execute: checkScheduledJobs,
+    },
+    {
+      name: "calendar" as const,
+      priority: 2, // Time-sensitive
+      execute: (ctx: HookContext) =>
+        checkCalendar(ctx, DEFAULT_HOOK_CONFIG.calendarReminderMinutes),
+    },
+    {
+      name: "github" as const,
+      priority: 3, // PR reviews can be urgent
+      execute: checkGitHub,
+    },
+    {
+      name: "gmail" as const,
+      priority: 4, // Important emails
+      execute: checkGmail,
+    },
+    {
+      name: "connectionReminder" as const,
+      priority: 5, // Low priority
+      execute: (ctx: HookContext) => checkConnectionReminder(ctx, 7), // 7 days between reminders
+    },
+    {
+      name: "deepResearch" as const,
+      priority: 6, // Background task, lowest priority
+      execute: checkDeepResearch,
+    },
+  ] satisfies HookDefinition[]
+).sort((a, b) => a.priority - b.priority);
 
 /**
  * Build the hook context for a user
@@ -198,30 +250,18 @@ export const proactiveUserCheck = task({
     const userCooldowns = (rawContext?.hookCooldowns as HookCooldowns) || null;
     const schedules = getEffectiveSchedules(userCooldowns);
 
-    // Determine which hooks are due
-    const dueHooks: HookName[] = [];
-    const skippedHooks: HookName[] = [];
-
-    const allHooks: HookName[] = [
-      "scheduledJobs",
-      "calendar",
-      "github",
-      "gmail",
-      "connectionReminder",
-    ];
-
-    for (const hookName of allHooks) {
-      if (isHookDue(hookName, lastRunTimes, schedules)) {
-        dueHooks.push(hookName);
-      } else {
-        skippedHooks.push(hookName);
-      }
-    }
+    // Determine which hooks are due (using the registry)
+    const dueHooks = HOOK_REGISTRY.filter((hook) =>
+      isHookDue(hook.name, lastRunTimes, schedules),
+    );
+    const skippedHooks = HOOK_REGISTRY.filter(
+      (hook) => !isHookDue(hook.name, lastRunTimes, schedules),
+    ).map((h) => h.name);
 
     console.log(
-      `[ProactiveUserCheck] User ${userId}: Due hooks: [${dueHooks.join(
-        ", ",
-      )}], Skipped: [${skippedHooks.join(", ")}]`,
+      `[ProactiveUserCheck] User ${userId}: Due hooks: [${dueHooks
+        .map((h) => h.name)
+        .join(", ")}], Skipped: [${skippedHooks.join(", ")}]`,
     );
 
     if (dueHooks.length === 0) {
@@ -233,68 +273,17 @@ export const proactiveUserCheck = task({
       };
     }
 
-    // Run only the due hooks (in priority order)
+    // Run all due hooks via dynamic dispatch (already sorted by priority)
     const hookResults: Array<{ name: HookName; result: HookResult }> = [];
 
-    // 1. Scheduled jobs (highest priority - user explicitly requested these)
-    if (dueHooks.includes("scheduledJobs")) {
+    for (const hook of dueHooks) {
       try {
-        const result = await checkScheduledJobs(context);
-        hookResults.push({ name: "scheduledJobs", result });
+        const result = await hook.execute(context);
+        hookResults.push({ name: hook.name, result });
         // Always update last run time, even if no notification
-        await updateHookLastRunTime(userId, "scheduledJobs", lastRunTimes);
+        await updateHookLastRunTime(userId, hook.name, lastRunTimes);
       } catch (error) {
-        console.error(`[ProactiveUserCheck] scheduledJobs hook error:`, error);
-      }
-    }
-
-    // 2. Calendar (time-sensitive)
-    if (dueHooks.includes("calendar")) {
-      try {
-        const result = await checkCalendar(
-          context,
-          DEFAULT_HOOK_CONFIG.calendarReminderMinutes,
-        );
-        hookResults.push({ name: "calendar", result });
-        await updateHookLastRunTime(userId, "calendar", lastRunTimes);
-      } catch (error) {
-        console.error(`[ProactiveUserCheck] calendar hook error:`, error);
-      }
-    }
-
-    // 3. GitHub (PR reviews can be urgent)
-    if (dueHooks.includes("github")) {
-      try {
-        const result = await checkGitHub(context);
-        hookResults.push({ name: "github", result });
-        await updateHookLastRunTime(userId, "github", lastRunTimes);
-      } catch (error) {
-        console.error(`[ProactiveUserCheck] github hook error:`, error);
-      }
-    }
-
-    // 4. Gmail (important emails)
-    if (dueHooks.includes("gmail")) {
-      try {
-        const result = await checkGmail(context);
-        hookResults.push({ name: "gmail", result });
-        await updateHookLastRunTime(userId, "gmail", lastRunTimes);
-      } catch (error) {
-        console.error(`[ProactiveUserCheck] gmail hook error:`, error);
-      }
-    }
-
-    // 5. Connection reminder (low priority)
-    if (dueHooks.includes("connectionReminder")) {
-      try {
-        const result = await checkConnectionReminder(context, 7); // 7 days between reminders
-        hookResults.push({ name: "connectionReminder", result });
-        await updateHookLastRunTime(userId, "connectionReminder", lastRunTimes);
-      } catch (error) {
-        console.error(
-          `[ProactiveUserCheck] connectionReminder hook error:`,
-          error,
-        );
+        console.error(`[ProactiveUserCheck] ${hook.name} hook error:`, error);
       }
     }
 
