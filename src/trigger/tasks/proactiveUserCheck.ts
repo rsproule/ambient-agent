@@ -199,12 +199,13 @@ function getEffectiveSchedules(
 
 /**
  * Update the last run time for a hook
+ * Returns the updated times object so callers can accumulate changes
  */
 async function updateHookLastRunTime(
   userId: string,
   hookName: HookName,
   existingTimes: HookLastRunTimes,
-): Promise<void> {
+): Promise<HookLastRunTimes> {
   const updatedTimes: HookLastRunTimes = {
     ...existingTimes,
     [hookName]: new Date().toISOString(),
@@ -216,6 +217,8 @@ async function updateHookLastRunTime(
       hookLastRunTimes: updatedTimes as Prisma.InputJsonValue,
     },
   });
+
+  return updatedTimes;
 }
 
 /**
@@ -275,13 +278,19 @@ export const proactiveUserCheck = task({
 
     // Run all due hooks via dynamic dispatch (already sorted by priority)
     const hookResults: Array<{ name: HookName; result: HookResult }> = [];
+    let currentLastRunTimes = lastRunTimes;
 
     for (const hook of dueHooks) {
       try {
         const result = await hook.execute(context);
         hookResults.push({ name: hook.name, result });
         // Always update last run time, even if no notification
-        await updateHookLastRunTime(userId, hook.name, lastRunTimes);
+        // Accumulate updates so each write includes previous hooks' times
+        currentLastRunTimes = await updateHookLastRunTime(
+          userId,
+          hook.name,
+          currentLastRunTimes,
+        );
       } catch (error) {
         console.error(`[ProactiveUserCheck] ${hook.name} hook error:`, error);
       }
