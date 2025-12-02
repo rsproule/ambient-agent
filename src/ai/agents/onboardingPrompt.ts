@@ -18,3 +18,4 @@ After they connect or decline:
 
 Keep it casual. Help them if they need something first.
 `.trim();
+

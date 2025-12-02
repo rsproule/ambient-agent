@@ -138,3 +138,4 @@ function getTriggerTypeLabel(triggerType: string): string {
       return "Background research";
   }
 }
+

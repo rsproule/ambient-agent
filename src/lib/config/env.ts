@@ -33,8 +33,8 @@ const envSchema = z.object({
   NEXTAUTH_URL: z.string().url().optional(),
   NEXTAUTH_SECRET: z.string().min(1, "NEXTAUTH_SECRET is required"),
 
-  // Application URL
-  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+  // Base URL
+  NEXT_PUBLIC_BASE_URL: z.string().url().optional(),
 
   // Node environment
   NODE_ENV: z

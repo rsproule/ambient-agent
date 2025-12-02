@@ -31,8 +31,7 @@ export const generateConnectionLinkTool = tool({
     try {
       // Get the base URL from environment or default to localhost
       const baseUrl =
-        env.NEXT_PUBLIC_APP_URL ||
-        process.env.NEXT_PUBLIC_BASE_URL ||
+        env.NEXT_PUBLIC_BASE_URL ||
         "https://mrwhiskers.chat";
 
       // Generate the magic link

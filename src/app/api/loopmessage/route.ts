@@ -15,8 +15,7 @@ import { NextResponse } from "next/server";
 
 // Get vCard URL from environment
 const BASE_URL =
-  env.NEXT_PUBLIC_APP_URL ||
-  process.env.NEXT_PUBLIC_APP_URL ||
+  env.NEXT_PUBLIC_BASE_URL ||
   "http://localhost:3000";
 const VCARD_URL = `${BASE_URL}/mr-whiskers.vcf`;
 

@@ -4,7 +4,7 @@
  */
 
 import { auth } from "@/src/lib/auth/config";
-import { pipedreamConfig } from "@/src/lib/config/env";
+import { env, pipedreamConfig } from "@/src/lib/config/env";
 import { createConnectToken } from "@/src/lib/pipedream/client";
 import { getProviderConfig } from "@/src/lib/pipedream/providers";
 import { NextRequest, NextResponse } from "next/server";
@@ -47,7 +47,7 @@ export async function POST(
     }
 
     // Generate the callback URL
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin;
+    const baseUrl = env.NEXT_PUBLIC_BASE_URL || request.nextUrl.origin;
     const callbackUrl = `${baseUrl}/api/connections/${provider}/callback`;
     const successRedirectUri = `${callbackUrl}?userId=${userId}`;
     const errorRedirectUri = `${baseUrl}/connections/${userId}?error=auth_failed`;

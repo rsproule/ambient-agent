@@ -40,8 +40,7 @@ export async function POST(request: NextRequest) {
 
     // Get the base URL
     const baseUrl =
-      env.NEXT_PUBLIC_APP_URL ||
-      process.env.NEXT_PUBLIC_APP_URL ||
+      env.NEXT_PUBLIC_BASE_URL ||
       request.nextUrl.origin;
 
     // Generate the magic link

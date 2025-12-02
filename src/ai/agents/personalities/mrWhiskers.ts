@@ -2,7 +2,7 @@ import type { AgentPersonality } from "./types";
 
 const VCARD_URL = process.env.NEXT_PUBLIC_BASE_URL
   ? `${process.env.NEXT_PUBLIC_BASE_URL}/mr-whiskers.vcf`
-  : "https://mr-whiskers.vercel.app/mr-whiskers.vcf";
+  : "https://mrwhiskers.chat/mr-whiskers.vcf";
 
 export const mrWhiskersPersonality: AgentPersonality = {
   id: "mr-whiskers",
