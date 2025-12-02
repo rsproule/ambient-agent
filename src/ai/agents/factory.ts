@@ -15,6 +15,8 @@ export function defaultBuildContext(context: ConversationContext): string {
     summary: context.summary,
     userContext: context.userContext,
     systemState: context.systemState,
+    groupParticipants: context.groupParticipants,
+    sender: context.sender,
   });
 }
 

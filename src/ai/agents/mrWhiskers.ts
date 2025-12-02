@@ -1,15 +1,4 @@
-import {
-  completeOnboardingTool,
-  createImageTool,
-  createScheduledJobTool,
-  deleteScheduledJobTool,
-  generateConnectionLinkTool,
-  getUserContextTool,
-  listScheduledJobsTool,
-  requestResearchTool,
-  toggleScheduledJobTool,
-  updateUserContextTool,
-} from "@/src/ai/tools";
+import { createImageTool } from "@/src/ai/tools";
 import { webSearchPerplexityTool } from "@/src/components/ai-tools/websearch/tool";
 import { IMessageResponseSchema } from "@/src/lib/loopmessage-sdk/actions";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -21,31 +10,20 @@ const anthropic = createAnthropic({
   baseURL: "https://echo.router.merit.systems",
 });
 
+/**
+ * Base Mr. Whiskers agent configuration.
+ *
+ * NOTE: This agent only includes static tools (createImage, webSearch).
+ * Context-bound tools (getUserContext, updateUserContext, scheduledJobs, etc.)
+ * are added dynamically in respondToMessage based on the conversation context.
+ * This ensures user identity comes from system context (cannot be spoofed).
+ */
 export const mrWhiskersAgent = createAgent({
   personality: mrWhiskersPersonality,
   model: anthropic("claude-haiku-4-5-20251001"),
   schema: IMessageResponseSchema,
   tools: {
-    // User context tools
-    getUserContext: getUserContextTool,
-    updateUserContext: updateUserContextTool,
-
-    // Account connection tools
-    generateConnectionLink: generateConnectionLinkTool,
-
-    // Research tools
-    requestResearch: requestResearchTool,
-
-    // Onboarding tools
-    completeOnboarding: completeOnboardingTool,
-
-    // Scheduled job tools
-    createScheduledJob: createScheduledJobTool,
-    listScheduledJobs: listScheduledJobsTool,
-    deleteScheduledJob: deleteScheduledJobTool,
-    toggleScheduledJob: toggleScheduledJobTool,
-
-    // Chat tools
+    // Static tools (no user identity needed)
     createImage: createImageTool,
     webSearch: webSearchPerplexityTool,
   },

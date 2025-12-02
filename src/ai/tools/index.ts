@@ -8,22 +8,22 @@
  * - Create images
  * - Access integrated services (Gmail, GitHub, Calendar) via OAuth
  * - Create and manage scheduled jobs
+ *
+ * Security: User-identity-sensitive tools are context-bound factories.
+ * The phone number is taken from authenticated context, not user input,
+ * preventing spoofing via prompt injection.
  */
 
-export { completeOnboardingTool } from "./completeOnboarding";
-export { createImageTool } from "./createImage";
-export { generateConnectionLinkTool } from "./generateConnectionLink";
-export { getUserContextTool } from "./getUserContext";
-export { requestResearchTool } from "./requestResearch";
-export { updateUserContextTool } from "./updateUserContext";
+// Context-bound tools (identity from system context, cannot be spoofed)
+export { createCompleteOnboardingTool } from "./completeOnboarding";
+export { createGenerateConnectionLinkTool } from "./generateConnectionLink";
+export { createGetUserContextTool } from "./getUserContext";
+export { createRequestResearchTool } from "./requestResearch";
+export { createUpdateUserContextTool } from "./updateUserContext";
+export { createScheduledJobTools } from "./scheduledJob";
 
-// Scheduled job tools
-export {
-  createScheduledJobTool,
-  deleteScheduledJobTool,
-  listScheduledJobsTool,
-  toggleScheduledJobTool,
-} from "./scheduledJob";
+// Static tools (no user identity needed)
+export { createImageTool } from "./createImage";
 
 // Integration tools (context-bound)
 export { createCalendarTools } from "./calendar";

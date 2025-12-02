@@ -1,8 +1,14 @@
 import type { Agent } from "@/src/ai/agents/types";
 import {
   createCalendarTools,
+  createCompleteOnboardingTool,
+  createGenerateConnectionLinkTool,
+  createGetUserContextTool,
   createGitHubTools,
   createGmailTools,
+  createRequestResearchTool,
+  createScheduledJobTools,
+  createUpdateUserContextTool,
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
@@ -40,6 +46,17 @@ export async function respondToMessage(
   // This reduces memory usage when no OAuth connections exist
   const userHasConnections = await hasActiveConnections(context);
 
+  // Create context-bound tools (identity from system context, cannot be spoofed)
+  // These tools get user identity from context.sender (for groups) or context.conversationId (for DMs)
+  const contextBoundTools = {
+    getUserContext: createGetUserContextTool(context),
+    updateUserContext: createUpdateUserContextTool(context),
+    generateConnectionLink: createGenerateConnectionLinkTool(context),
+    requestResearch: createRequestResearchTool(context),
+    completeOnboarding: createCompleteOnboardingTool(context),
+    ...createScheduledJobTools(context),
+  };
+
   // Conditionally merge integration tools only if user has connections
   const integrationTools = userHasConnections
     ? {
@@ -51,6 +68,7 @@ export async function respondToMessage(
 
   const allTools = {
     ...(agent.tools || {}),
+    ...contextBoundTools,
     ...integrationTools,
   };
 
