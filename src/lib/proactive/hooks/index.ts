@@ -10,4 +10,5 @@ export { checkGitHub } from "./checkGitHub";
 export { checkGmail } from "./checkGmail";
 export { checkConnectionReminder } from "./checkConnectionReminder";
 export { checkScheduledJobs } from "./checkScheduledJobs";
+export { checkDeepResearch } from "./checkDeepResearch";
 
