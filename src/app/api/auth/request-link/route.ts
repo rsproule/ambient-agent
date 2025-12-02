@@ -1,7 +1,7 @@
 /**
  * API endpoint for requesting a magic link via phone number
  * POST /api/auth/request-link
- * 
+ *
  * This endpoint:
  * 1. Accepts a phone number
  * 2. Generates a magic link
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     if (!phoneNumber || typeof phoneNumber !== "string") {
       return NextResponse.json(
         { error: "Phone number is required" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     if (cleanedPhone.length < 10) {
       return NextResponse.json(
         { error: "Invalid phone number format" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     // Send the magic link via iMessage through Mr. Whiskers
     // We use the handleMessageResponse task to send the message
     const taskId = `magic-link-${Date.now()}`;
-    
+
     await tasks.trigger<typeof handleMessageResponse>(
       "handle-message-response",
       {
@@ -59,11 +59,11 @@ export async function POST(request: NextRequest) {
         actions: [
           {
             type: "message",
-            text: `🔗 Here's your secure connection link!\n\nClick here to manage your accounts:\n${magicLinkUrl}\n\nThis link expires in 1 hour and can only be used once.`,
+            text: magicLinkUrl,
           },
         ],
         taskId,
-      }
+      },
     );
 
     return NextResponse.json({
@@ -77,8 +77,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to send magic link",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
-

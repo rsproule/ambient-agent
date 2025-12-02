@@ -86,12 +86,15 @@ export async function validateMagicLinkToken(
   token: string
 ): Promise<ValidateTokenResult> {
   try {
+    console.log(`[MagicLink] Validating token: ${token.substring(0, 8)}...`);
+    
     // Find the token
     const verificationToken = await prisma.verificationToken.findUnique({
       where: { token },
     });
 
     if (!verificationToken) {
+      console.log(`[MagicLink] Token not found (may have been used already)`);
       return {
         valid: false,
         error: "Invalid token",
@@ -100,6 +103,7 @@ export async function validateMagicLinkToken(
 
     // Check if expired
     if (verificationToken.expires < new Date()) {
+      console.log(`[MagicLink] Token expired at ${verificationToken.expires.toISOString()}`);
       // Clean up expired token
       await prisma.verificationToken.delete({
         where: { token },
@@ -124,6 +128,7 @@ export async function validateMagicLinkToken(
     });
 
     if (!user) {
+      console.log(`[MagicLink] User not found for identifier: ${verificationToken.identifier}`);
       return {
         valid: false,
         error: "User not found",
@@ -135,6 +140,7 @@ export async function validateMagicLinkToken(
       where: { token },
     });
 
+    console.log(`[MagicLink] Token valid, user: ${user.id}`);
     return {
       valid: true,
       user: {
@@ -146,7 +152,7 @@ export async function validateMagicLinkToken(
       },
     };
   } catch (error) {
-    console.error("Error validating magic link token:", error);
+    console.error("[MagicLink] Error validating token:", error);
     return {
       valid: false,
       error: "Validation error",
