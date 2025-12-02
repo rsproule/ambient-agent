@@ -1,3 +1,5 @@
+import { ONBOARDING_PROMPT } from "./onboardingPrompt";
+
 /**
  * Base system prompt for iMessage interaction
  *
@@ -128,6 +130,9 @@ export interface SystemState {
   connectionLink?: string; // URL to connect accounts
   researchStatus?: "none" | "pending" | "completed";
   outboundOptIn?: boolean | null; // null = not asked, true = opted in, false = opted out
+
+  // Onboarding status
+  isOnboarding?: boolean; // Whether user is still in onboarding flow
 }
 
 /**
@@ -290,6 +295,14 @@ export function buildConversationContextPrompt(context: {
       parts.push(
         "- When relevant, ask if they'd like proactive updates (reminders, alerts, etc)",
       );
+    }
+
+    // Onboarding status
+    if (context.systemState.isOnboarding) {
+      parts.push("");
+      parts.push("═".repeat(50));
+      parts.push(ONBOARDING_PROMPT);
+      parts.push("═".repeat(50));
     }
   }
 

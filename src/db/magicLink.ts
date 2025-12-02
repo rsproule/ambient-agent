@@ -1,11 +1,11 @@
 /**
  * Magic Link Token Management
- * 
+ *
  * Uses NextAuth's VerificationToken model for magic link authentication
  */
 
 import prisma from "@/src/db/client";
-import { getUserByPhoneNumber, upsertUser } from "@/src/db/user";
+import { upsertUser } from "@/src/db/user";
 
 export interface MagicLinkToken {
   token: string;
@@ -33,7 +33,7 @@ function generateToken(): string {
   // Generate 32 random bytes using Web Crypto API
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  
+
   // Convert to hex string (universally compatible)
   return Array.from(array)
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -43,15 +43,15 @@ function generateToken(): string {
 /**
  * Create a magic link token for a user (identified by phone number)
  * Token expires in 1 hour
- * 
+ *
  * @param phoneNumber User's phone number
  * @returns Token string and expiration date
  */
 export async function createMagicLinkToken(
-  phoneNumber: string
+  phoneNumber: string,
 ): Promise<MagicLinkToken> {
   // Ensure user exists (create if not)
-  const user = await upsertUser(phoneNumber);
+  const { user } = await upsertUser(phoneNumber);
 
   // Generate token
   const token = generateToken();
@@ -77,24 +77,24 @@ export async function createMagicLinkToken(
 /**
  * Validate a magic link token
  * Checks if token exists, hasn't expired, and returns the associated user
- * Deletes the token after successful validation (one-time use)
- * 
+ * Token can be used multiple times until it expires (1 hour)
+ *
  * @param token Magic link token to validate
  * @returns Validation result with user data if valid
  */
 export async function validateMagicLinkToken(
-  token: string
+  token: string,
 ): Promise<ValidateTokenResult> {
   try {
     console.log(`[MagicLink] Validating token: ${token.substring(0, 8)}...`);
-    
+
     // Find the token
     const verificationToken = await prisma.verificationToken.findUnique({
       where: { token },
     });
 
     if (!verificationToken) {
-      console.log(`[MagicLink] Token not found (may have been used already)`);
+      console.log(`[MagicLink] Token not found`);
       return {
         valid: false,
         error: "Invalid token",
@@ -103,7 +103,9 @@ export async function validateMagicLinkToken(
 
     // Check if expired
     if (verificationToken.expires < new Date()) {
-      console.log(`[MagicLink] Token expired at ${verificationToken.expires.toISOString()}`);
+      console.log(
+        `[MagicLink] Token expired at ${verificationToken.expires.toISOString()}`,
+      );
       // Clean up expired token
       await prisma.verificationToken.delete({
         where: { token },
@@ -128,18 +130,16 @@ export async function validateMagicLinkToken(
     });
 
     if (!user) {
-      console.log(`[MagicLink] User not found for identifier: ${verificationToken.identifier}`);
+      console.log(
+        `[MagicLink] User not found for identifier: ${verificationToken.identifier}`,
+      );
       return {
         valid: false,
         error: "User not found",
       };
     }
 
-    // Delete token (one-time use)
-    await prisma.verificationToken.delete({
-      where: { token },
-    });
-
+    // Token remains valid until expiration (multi-use)
     console.log(`[MagicLink] Token valid, user: ${user.id}`);
     return {
       valid: true,
@@ -178,18 +178,17 @@ export async function cleanupExpiredTokens(): Promise<number> {
 /**
  * Generate a full magic link URL for a phone number
  * This URL can be sent to the user via iMessage
- * 
+ *
  * @param phoneNumber User's phone number
  * @param baseUrl Application base URL (e.g., http://localhost:3000)
  * @returns Full magic link URL
  */
 export async function generateMagicLinkUrl(
   phoneNumber: string,
-  baseUrl: string
+  baseUrl: string,
 ): Promise<string> {
   const { token } = await createMagicLinkToken(phoneNumber);
-  
+
   // The magic link goes to NextAuth's callback endpoint
   return `${baseUrl}/api/auth/callback/credentials?token=${token}`;
 }
-

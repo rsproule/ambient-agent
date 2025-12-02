@@ -1,5 +1,6 @@
 import { saveUserMessage } from "@/src/db/conversation";
 import { upsertUser, upsertUsers } from "@/src/db/user";
+import { env } from "@/src/lib/config/env";
 import type {
   LoopWebhook,
   MessageInboundWebhook,
@@ -11,6 +12,13 @@ import {
 } from "@/src/lib/validation/userValidation";
 import { debouncedResponse } from "@/src/trigger/tasks/debouncedResponse";
 import { NextResponse } from "next/server";
+
+// Get vCard URL from environment
+const BASE_URL =
+  env.NEXT_PUBLIC_APP_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "http://localhost:3000";
+const VCARD_URL = `${BASE_URL}/mr-whiskers.vcf`;
 
 export async function POST(request: Request) {
   try {
@@ -55,6 +63,7 @@ async function inboundMessageHandler(
   // Determine conversation identifier (phone number or group_id)
   const conversationId = webhook.group?.group_id || webhook.recipient || "";
   const isGroup = !!webhook.group;
+  let isNewUser = false;
 
   // Validate recipient/participants
   if (isGroup && webhook.group?.participants) {
@@ -80,8 +89,13 @@ async function inboundMessageHandler(
         `Invalid recipient identifier: ${webhook.recipient}. Must be a valid phone number (E.164) or email.`,
       );
     }
-    // For DMs: upsert the sender
-    await upsertUser(webhook.recipient);
+    // For DMs: upsert the sender and check if new
+    const result = await upsertUser(webhook.recipient);
+    isNewUser = result.isNewUser;
+
+    if (isNewUser) {
+      console.log(`New user detected: ${webhook.recipient}`);
+    }
   } else {
     // No recipient or group - reject
     console.error("Message has no recipient or group information");
@@ -101,12 +115,15 @@ async function inboundMessageHandler(
   );
 
   // Trigger debounced response task with the message timestamp
-  // Use the DB timestamp to ensure accuracy
+  // Include onboarding data for DMs with new users
   await debouncedResponse.trigger({
     conversationId,
     recipient: webhook.recipient,
     group: webhook.group?.group_id,
     timestampWhenTriggered: savedMessage.createdAt.toISOString(),
+    // Onboarding: attach vCard for new users
+    isNewUser: isNewUser && !isGroup,
+    vcardUrl: isNewUser && !isGroup ? VCARD_URL : undefined,
   });
 
   return {

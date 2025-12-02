@@ -1,4 +1,5 @@
 import {
+  completeOnboardingTool,
   createImageTool,
   createScheduledJobTool,
   deleteScheduledJobTool,
@@ -34,6 +35,9 @@ export const mrWhiskersAgent = createAgent({
 
     // Research tools
     requestResearch: requestResearchTool,
+
+    // Onboarding tools
+    completeOnboarding: completeOnboardingTool,
 
     // Scheduled job tools
     createScheduledJob: createScheduledJobTool,

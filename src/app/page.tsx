@@ -1,6 +1,5 @@
-import { LinkIcon, MessageSquare } from "lucide-react";
+import { MessageSquare } from "lucide-react";
 import Image from "next/image";
-import Link from "next/link";
 
 export default function Home() {
   return (
@@ -24,14 +23,6 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col gap-3 w-full max-w-sm">
-          <Link
-            href="/connections"
-            className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-secondary hover:bg-secondary/80 text-secondary-foreground font-semibold rounded-md shadow-md transition-all active:scale-95"
-          >
-            <LinkIcon className="h-5 w-5" />
-            Manage Connections
-          </Link>
-
           <a
             href="sms:+17243216167&body=Hi Mr. Whiskers"
             className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold rounded-md shadow-md transition-all active:scale-95"

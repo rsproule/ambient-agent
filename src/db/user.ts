@@ -5,6 +5,7 @@ export interface User {
   phoneNumber?: string;
   name?: string;
   email?: string;
+  hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -104,13 +105,24 @@ export async function listUsers(
   return users.map(formatUser);
 }
 
+export interface UpsertUserResult {
+  user: User;
+  isNewUser: boolean;
+}
+
 /**
  * Upsert a user by phone number (creates if doesn't exist, updates if exists)
+ * Returns the user and whether they were newly created
  */
 export async function upsertUser(
   phoneNumber: string,
   input?: Partial<CreateUserInput>,
-): Promise<User> {
+): Promise<UpsertUserResult> {
+  // Check if user exists first
+  const existingUser = await prisma.user.findUnique({
+    where: { phoneNumber },
+  });
+
   const user = await prisma.user.upsert({
     where: { phoneNumber },
     create: {
@@ -125,7 +137,10 @@ export async function upsertUser(
     },
   });
 
-  return formatUser(user);
+  return {
+    user: formatUser(user),
+    isNewUser: !existingUser,
+  };
 }
 
 /**
@@ -136,11 +151,11 @@ export async function upsertUsers(phoneNumbers: string[]): Promise<User[]> {
   const uniquePhoneNumbers = [...new Set(phoneNumbers.filter(Boolean))];
 
   // Use a transaction to upsert all users
-  const users = await Promise.all(
+  const results = await Promise.all(
     uniquePhoneNumbers.map((phoneNumber) => upsertUser(phoneNumber)),
   );
 
-  return users;
+  return results.map((r) => r.user);
 }
 
 /**
@@ -185,6 +200,33 @@ export async function getOutboundOptIn(
 }
 
 /**
+ * Set onboarding completion status for a user
+ */
+export async function setOnboardingComplete(
+  phoneNumber: string,
+  complete: boolean = true,
+): Promise<void> {
+  await prisma.user.update({
+    where: { phoneNumber },
+    data: { hasCompletedOnboarding: complete },
+  });
+}
+
+/**
+ * Check if user has completed onboarding
+ */
+export async function hasCompletedOnboarding(
+  phoneNumber: string,
+): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { phoneNumber },
+    select: { hasCompletedOnboarding: true },
+  });
+
+  return user?.hasCompletedOnboarding ?? false;
+}
+
+/**
  * Format user from database to application format
  */
 function formatUser(user: {
@@ -192,6 +234,7 @@ function formatUser(user: {
   phoneNumber: string | null;
   name: string | null;
   email: string | null;
+  hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
 }): User {
@@ -200,6 +243,7 @@ function formatUser(user: {
     phoneNumber: user.phoneNumber ?? undefined,
     name: user.name ?? undefined,
     email: user.email ?? undefined,
+    hasCompletedOnboarding: user.hasCompletedOnboarding,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
