@@ -12,7 +12,6 @@ const devFormat = printf(({ level, message, timestamp, ...meta }) => {
   if (meta.groupId) contextParts.push(`group:${meta.groupId}`);
   if (meta.sender) contextParts.push(`sender:${meta.sender}`);
   if (meta.conversationId) contextParts.push(`conv:${meta.conversationId}`);
-  if (meta.component) contextParts.push(meta.component);
 
   const contextPrefix =
     contextParts.length > 0 ? `[${contextParts.join("][")}] ` : "";
@@ -42,19 +41,16 @@ const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || "info",
   format: combine(
     errors({ stack: true }),
-    timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" })
+    timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
   ),
   transports: [
     new winston.transports.Console({
       format: useJsonFormat
-        ? combine(
-            timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
-            json()
-          )
+        ? combine(timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }), json())
         : combine(
             colorize({ all: true }),
             timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
-            devFormat
+            devFormat,
           ),
     }),
   ],
@@ -67,11 +63,8 @@ if (process.env.LOG_FILE) {
   logger.add(
     new winston.transports.File({
       filename: process.env.LOG_FILE,
-      format: combine(
-        timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }),
-        json()
-      ),
-    })
+      format: combine(timestamp({ format: "YYYY-MM-DD HH:mm:ss.SSS" }), json()),
+    }),
   );
 }
 
