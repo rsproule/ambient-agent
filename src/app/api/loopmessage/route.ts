@@ -144,7 +144,7 @@ async function inboundMessageHandler(
   });
 
   return {
-    typing: 3,
+    typing: 6,
     read: true,
   };
 }
