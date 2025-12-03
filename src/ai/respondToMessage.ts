@@ -6,6 +6,7 @@ import {
   createGetUserContextTool,
   createGitHubTools,
   createGmailTools,
+  createGroupChatSettingsTools,
   createRequestResearchTool,
   createScheduledJobTools,
   createUpdateUserContextTool,
@@ -63,17 +64,29 @@ export async function respondToMessage(
 
   // Create context-bound tools (identity from system context, cannot be spoofed)
   // These tools get user identity from context.sender (for groups) or context.conversationId (for DMs)
-  const contextBoundTools = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const contextBoundTools: Record<string, any> = {
     getUserContext: createGetUserContextTool(context),
     updateUserContext: createUpdateUserContextTool(context),
-    generateConnectionLink: createGenerateConnectionLinkTool(context),
     requestResearch: createRequestResearchTool(context),
     completeOnboarding: createCompleteOnboardingTool(context),
     ...createScheduledJobTools(context),
   };
 
+  // Add DM-only tools (connection link not available in groups to prevent spam)
+  if (!context.isGroup) {
+    contextBoundTools.generateConnectionLink = createGenerateConnectionLinkTool(context);
+  }
+
+  // Add group chat-only tools (settings management)
+  if (context.isGroup) {
+    const groupTools = createGroupChatSettingsTools(context);
+    Object.assign(contextBoundTools, groupTools);
+  }
+
   // Conditionally merge integration tools only if user has connections
-  const integrationTools = userHasConnections
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const integrationTools: Record<string, any> = userHasConnections
     ? {
         ...createGmailTools(context),
         ...createGitHubTools(context),

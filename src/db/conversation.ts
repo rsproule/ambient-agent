@@ -5,6 +5,7 @@ import type {
 } from "@/src/ai/agents/systemPrompt";
 import prisma from "@/src/db/client";
 import { getUserConnections } from "@/src/db/connection";
+import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
 import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
 import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
@@ -64,6 +65,7 @@ export interface ConversationContext {
   systemState?: SystemState | null; // Connection status and other system state
   groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
   recentAttachments?: string[]; // URLs of recent image attachments from the conversation (most recent first)
+  groupChatCustomPrompt?: string | null; // Custom prompt for this group chat (injected into system prompt)
 }
 
 /**
@@ -376,8 +378,9 @@ export async function getConversationMessages(
   let userContext: UserResearchContext | null = null;
   let systemState: SystemState | null = null;
   let groupParticipants: GroupParticipantInfo[] | null = null;
+  let groupChatCustomPrompt: string | null = null;
 
-  // For group chats, look up participant identities
+  // For group chats, look up participant identities and custom prompt
   if (conversation.isGroup && conversation.participants.length > 0) {
     try {
       groupParticipants = await Promise.all(
@@ -405,6 +408,16 @@ export async function getConversationMessages(
     } catch (error) {
       console.warn(
         `[getConversationMessages] Failed to fetch group participant info:`,
+        error,
+      );
+    }
+
+    // Fetch group chat custom prompt
+    try {
+      groupChatCustomPrompt = await getGroupChatCustomPrompt(conversationId);
+    } catch (error) {
+      console.warn(
+        `[getConversationMessages] Failed to fetch group chat custom prompt:`,
         error,
       );
     }
@@ -531,6 +544,7 @@ export async function getConversationMessages(
       systemState,
       groupParticipants,
       recentAttachments: recentAttachments.length > 0 ? recentAttachments : undefined,
+      groupChatCustomPrompt,
     },
   };
 }
@@ -748,14 +762,54 @@ export async function hasNewMessagesSince(
 }
 
 /**
+ * Sender locks type for group chats
+ * Maps sender phone number to their active task ID
+ */
+type SenderLocks = Record<string, string>;
+
+/**
  * Acquire lock for sending messages in a conversation
+ *
+ * For DMs: Uses conversation-level lock (activeResponseTaskId)
+ * For Group Chats with sender: Uses per-sender lock (senderLocks JSON)
+ *   - This allows multiple senders to have parallel response tasks
+ *   - Each sender's messages debounce independently
+ *
+ * @param conversationId - The conversation identifier
+ * @param taskId - The unique task ID for this response
+ * @param sender - Optional sender phone number (required for group chat per-sender locking)
+ * @param isGroup - Whether this is a group chat
  */
 export async function acquireResponseLock(
   conversationId: string,
   taskId: string,
+  sender?: string,
+  isGroup?: boolean,
 ): Promise<boolean> {
   const conversation = await getOrCreateConversation(conversationId);
 
+  // For group chats with a sender, use per-sender locking
+  if (isGroup && sender) {
+    const senderLocks = (conversation.senderLocks as SenderLocks) || {};
+
+    // Check if this sender already has an active task
+    if (senderLocks[sender]) {
+      // Don't interrupt other senders - just this sender's previous task
+      // For groups, we allow parallel responses from different senders
+      return false;
+    }
+
+    // Acquire per-sender lock
+    const updatedLocks = { ...senderLocks, [sender]: taskId };
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { senderLocks: updatedLocks },
+    });
+
+    return true;
+  }
+
+  // For DMs: use conversation-level lock (original behavior)
   // If there's already an active response, request interrupt
   if (conversation.activeResponseTaskId) {
     await prisma.conversation.update({
@@ -779,13 +833,37 @@ export async function acquireResponseLock(
 
 /**
  * Release the response lock for a conversation
+ *
+ * @param conversationId - The conversation identifier
+ * @param taskId - The unique task ID to release
+ * @param sender - Optional sender phone number (for group chat per-sender locking)
+ * @param isGroup - Whether this is a group chat
  */
 export async function releaseResponseLock(
   conversationId: string,
   taskId: string,
+  sender?: string,
+  isGroup?: boolean,
 ): Promise<void> {
   const conversation = await getOrCreateConversation(conversationId);
 
+  // For group chats with a sender, release per-sender lock
+  if (isGroup && sender) {
+    const senderLocks = (conversation.senderLocks as SenderLocks) || {};
+
+    // Only release if this task owns the sender's lock
+    if (senderLocks[sender] === taskId) {
+      const updatedLocks = { ...senderLocks };
+      delete updatedLocks[sender];
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { senderLocks: updatedLocks },
+      });
+    }
+    return;
+  }
+
+  // For DMs: use conversation-level lock (original behavior)
   // Only release if this task owns the lock
   if (conversation.activeResponseTaskId === taskId) {
     await prisma.conversation.update({
@@ -800,11 +878,28 @@ export async function releaseResponseLock(
 
 /**
  * Check if the current response should be interrupted
+ *
+ * For group chats with per-sender locking, we don't support interrupts
+ * (each sender's tasks are independent and don't interrupt each other)
+ *
+ * @param conversationId - The conversation identifier
+ * @param taskId - The unique task ID to check
+ * @param sender - Optional sender phone number (for group chat per-sender locking)
+ * @param isGroup - Whether this is a group chat
  */
 export async function shouldInterrupt(
   conversationId: string,
   taskId: string,
+  sender?: string,
+  isGroup?: boolean,
 ): Promise<boolean> {
+  // For group chats with per-sender locking, no interrupts
+  // Each sender's response tasks are independent
+  if (isGroup && sender) {
+    return false;
+  }
+
+  // For DMs: check conversation-level interrupt flag
   const conversation = await prisma.conversation.findUnique({
     where: { conversationId },
     select: { activeResponseTaskId: true, interruptRequested: true },

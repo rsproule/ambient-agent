@@ -163,6 +163,7 @@ export function buildConversationContextPrompt(context: {
   systemState?: SystemState | null;
   groupParticipants?: GroupParticipantInfo[] | null;
   sender?: string; // The authenticated sender (for group chats)
+  groupChatCustomPrompt?: string | null; // Custom behavior prompt for this group chat
 }): string {
   const parts: string[] = [];
 
@@ -204,6 +205,17 @@ export function buildConversationContextPrompt(context: {
     parts.push(
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
     );
+
+    // Custom group chat behavior (if configured)
+    if (context.groupChatCustomPrompt) {
+      parts.push("");
+      parts.push("GROUP CHAT CUSTOM BEHAVIOR:");
+      parts.push(context.groupChatCustomPrompt);
+      parts.push("");
+      parts.push(
+        "Note: Users can update this behavior by asking you to change your group chat settings.",
+      );
+    }
 
     // Group participant identities (show this first so CURRENT SENDER can reference it)
     if (context.groupParticipants && context.groupParticipants.length > 0) {
@@ -303,7 +315,7 @@ export function buildConversationContextPrompt(context: {
     parts.push("SYSTEM STATE:");
 
     if (!context.systemState.hasAnyConnection) {
-      // No connections at all - aggressively push connection link
+      // No connections at all
       parts.push("⚠️ USER HAS NO CONNECTED ACCOUNTS");
       parts.push(
         "- The user hasn't connected any accounts (Gmail, GitHub, Calendar)",
@@ -311,17 +323,25 @@ export function buildConversationContextPrompt(context: {
       parts.push(
         "- You can do much more if they connect - research them, check emails, manage calendar, etc.",
       );
-      parts.push("");
-      parts.push(
-        "🚨 MANDATORY: If this is NOT the first message in the conversation:",
-      );
-      parts.push(
-        "- You MUST call generateConnectionLink and include the link in your response",
-      );
-      parts.push("- Do this EVERY response until they connect");
-      parts.push(
-        "- Work it naturally into the conversation but always include it",
-      );
+
+      // Only push connection links in DMs, never in group chats
+      if (!context.isGroup) {
+        parts.push("");
+        parts.push(
+          "🚨 MANDATORY: If this is NOT the first message in the conversation:",
+        );
+        parts.push(
+          "- You MUST call generateConnectionLink and include the link in your response",
+        );
+        parts.push("- Do this EVERY response until they connect");
+        parts.push(
+          "- Work it naturally into the conversation but always include it",
+        );
+      } else {
+        parts.push("");
+        parts.push("Note: Connection links are not available in group chats.");
+        parts.push("- If a user wants to connect, ask them to DM you directly");
+      }
     } else {
       // Has some connections - just note what's available, don't nag about missing ones
       const connected: string[] = [];

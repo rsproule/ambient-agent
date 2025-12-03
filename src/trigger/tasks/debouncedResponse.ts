@@ -108,23 +108,42 @@ export const debouncedResponse = task({
   },
   run: async (payload: DebouncedResponsePayload, { ctx }) => {
     const taskId = ctx.run.id; // Unique ID for this task run
+    const isGroup = !!payload.group;
+    // For group chats, recipient is the sender of the message
+    const sender = isGroup ? payload.recipient : undefined;
 
     // Wait 1 second (debounce period) to batch rapid messages
     await wait.for({ seconds: 1 });
 
-    // Try to acquire the response lock (this prevents duplicate responses)
+    // Try to acquire the response lock
+    // For DMs: conversation-level lock (prevents duplicate responses)
+    // For Group Chats: per-sender lock (allows parallel responses from different senders)
     const lockAcquired = await acquireResponseLock(
       payload.conversationId,
       taskId,
+      sender,
+      isGroup,
     );
 
     const log = createContextLogger({
       component: "debouncedResponse",
       conversationId: payload.conversationId,
       groupId: payload.group,
+      sender,
     });
 
     if (!lockAcquired) {
+      // For group chats, if we can't acquire lock for this sender, just skip
+      // (their previous message is still being processed)
+      if (isGroup) {
+        log.info("Sender already has active response, skipping duplicate");
+        return {
+          skipped: true,
+          reason: "sender_response_in_progress",
+        };
+      }
+
+      // For DMs: try to interrupt and retry
       log.info("Another response is active, interrupting and waiting");
       // Wait for the interrupt to take effect (give it 2 seconds max)
       await wait.for({ seconds: 2 });
@@ -133,6 +152,8 @@ export const debouncedResponse = task({
       const retryLock = await acquireResponseLock(
         payload.conversationId,
         taskId,
+        sender,
+        isGroup,
       );
       if (!retryLock) {
         log.info("Could not acquire lock, giving up");
@@ -158,6 +179,13 @@ export const debouncedResponse = task({
         skipped: true,
         reason: "no_messages",
       };
+    }
+
+    // Override sender from task context to ensure correct tool authentication in group chats
+    // This is critical for security: we must use the sender who triggered this task,
+    // not the most recent message sender (which may be a different participant)
+    if (isGroup && sender) {
+      context.sender = sender;
     }
 
     // Log conversation type and context with sender info
@@ -207,7 +235,12 @@ export const debouncedResponse = task({
       // If no actions, we're done (e.g., group chat where no response is needed)
       if (actions.length === 0) {
         log.info("No actions to execute (likely group chat silence)");
-        await releaseResponseLock(payload.conversationId, taskId);
+        await releaseResponseLock(
+          payload.conversationId,
+          taskId,
+          sender,
+          isGroup,
+        );
         return {
           success: true,
           actionsExecuted: 0,
@@ -222,6 +255,8 @@ export const debouncedResponse = task({
         group: payload.group,
         actions,
         taskId,
+        sender,
+        isGroup,
       });
 
       return {
@@ -230,7 +265,12 @@ export const debouncedResponse = task({
       };
     } catch (error) {
       // Release lock on error
-      await releaseResponseLock(payload.conversationId, taskId);
+      await releaseResponseLock(
+        payload.conversationId,
+        taskId,
+        sender,
+        isGroup,
+      );
       throw error;
     }
   },

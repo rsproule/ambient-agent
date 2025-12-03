@@ -24,6 +24,7 @@ model Conversation {
   createdAt            DateTime  @default(now())
   activeResponseTaskId String? // Task ID currently sending messages
   interruptRequested   Boolean   @default(false) // Signal to stop current response
+  senderLocks          Json? // For group chats: { "sender_phone": "taskId" } - per-sender active task tracking
   messages             Message[]
 
   @@index([conversationId])
@@ -307,4 +308,22 @@ model ScheduledJob {
 
   @@index([userId])
   @@index([enabled, nextRunAt])
+}
+
+// ============================================
+// Group Chat Settings
+// ============================================
+
+model GroupChatSettings {
+  id             String @id @default(cuid())
+  conversationId String @unique // Links to Conversation.conversationId (group_id)
+
+  // Custom behavior prompt - injected into system prompt for this group
+  // Users can describe how they want the AI to behave via natural language
+  customPrompt String? @db.Text
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId])
 }
