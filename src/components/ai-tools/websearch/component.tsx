@@ -2,28 +2,7 @@
 
 import * as React from "react"
 import { Loader } from "@/src/components/loader"
-
-// Inline type since we simplified the tool to return raw Perplexity results
-interface WebSearchItem {
-  title: string
-  url: string
-  snippet?: string
-  source?: string
-}
 import { CodeBlock } from "@/src/components/code-block"
-import {
-  InlineCitationCard,
-  InlineCitationCardBody,
-  InlineCitationCardTrigger,
-  InlineCitationCarousel,
-  InlineCitationCarouselContent,
-  InlineCitationCarouselHeader,
-  InlineCitationCarouselIndex,
-  InlineCitationCarouselItem,
-  InlineCitationCarouselNext,
-  InlineCitationCarouselPrev,
-  InlineCitationSource,
-} from "@/src/components/inline-citation"
 import {
   Sources,
   SourcesContent,
@@ -140,87 +119,32 @@ export function WebSearchList({
     )
   }
   if (part.output === undefined) return null
-  const { query, results } = part.output
+  
+  // Tool returns raw Perplexity generateText result
+  const output = part.output as { text?: string; sources?: Array<{ url: string; title?: string }> }
+  const text = output.text || ""
+  const sources = output.sources || []
+  
   return (
     <Card className={cn(cardBaseClass, "max-w-xl animate-in fade-in-50")}>
-      {renderHeader(
-        "Web Search",
-        <span className="text-xs text-muted-foreground">
-          Query <span className="font-medium text-foreground">{query}</span>
-        </span>
-      )}
+      {renderHeader("Web Search")}
       <CardContent className={cn(contentBaseClass, "space-y-4")}>
-        {results.length === 0 ? (
+        {text ? (
+          <div className="text-sm text-foreground whitespace-pre-wrap">{text}</div>
+        ) : (
           <div className="text-sm text-muted-foreground">No results.</div>
-        ) : null}
-        <ul className="space-y-3">
-          {results.map((r: WebSearchItem, idx: number) => {
-            const hostname = (() => {
-              try {
-                return new URL(r.url).hostname
-              } catch {
-                return r.source ?? "source"
-              }
-            })()
-            return (
-              <li
-                key={r.url || idx}
-                className="rounded-lg border border-border/40 bg-muted/30 px-4 py-3 transition-colors hover:border-border/60"
-              >
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                  <a
-                    href={r.url}
-                    className="font-medium text-sm leading-tight text-foreground hover:underline"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    {r.title}
-                  </a>
-                  <InlineCitationCard>
-                    <InlineCitationCardTrigger sources={[r.url]} />
-                    <InlineCitationCardBody>
-                      <InlineCitationCarousel>
-                        <InlineCitationCarouselHeader>
-                          <InlineCitationCarouselPrev />
-                          <InlineCitationCarouselIndex />
-                          <InlineCitationCarouselNext />
-                        </InlineCitationCarouselHeader>
-                        <InlineCitationCarouselContent>
-                          <InlineCitationCarouselItem>
-                            <InlineCitationSource
-                              title={r.title}
-                              url={r.url}
-                              description={r.snippet}
-                            />
-                          </InlineCitationCarouselItem>
-                        </InlineCitationCarouselContent>
-                      </InlineCitationCarousel>
-                    </InlineCitationCardBody>
-                  </InlineCitationCard>
-                </div>
-                {r.snippet ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {r.snippet}
-                  </div>
-                ) : null}
-                <div className="mt-2 text-[11px] uppercase tracking-wide text-muted-foreground">
-                  {hostname}
-                </div>
-              </li>
-            )
-          })}
-        </ul>
+        )}
 
-        {results.length > 0 ? (
+        {sources.length > 0 ? (
           <div className="mt-4">
             <Sources>
-              <SourcesTrigger count={results.length} />
+              <SourcesTrigger count={sources.length} />
               <SourcesContent>
-                {results.map((r: WebSearchItem, idx: number) => (
+                {sources.map((s, idx) => (
                   <SourcesItem
-                    key={r.url || idx}
-                    href={r.url}
-                    title={r.title}
+                    key={s.url || idx}
+                    href={s.url}
+                    title={s.title || s.url}
                   />
                 ))}
               </SourcesContent>
