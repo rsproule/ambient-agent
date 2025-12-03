@@ -181,6 +181,13 @@ export const debouncedResponse = task({
       };
     }
 
+    // Override sender from task context to ensure correct tool authentication in group chats
+    // This is critical for security: we must use the sender who triggered this task,
+    // not the most recent message sender (which may be a different participant)
+    if (isGroup && sender) {
+      context.sender = sender;
+    }
+
     // Log conversation type and context with sender info
     log.info("Processing conversation", {
       type: context.isGroup ? "GROUP_CHAT" : "DIRECT_MESSAGE",
