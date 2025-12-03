@@ -24,6 +24,7 @@ model Conversation {
   createdAt            DateTime  @default(now())
   activeResponseTaskId String? // Task ID currently sending messages
   interruptRequested   Boolean   @default(false) // Signal to stop current response
+  senderLocks          Json? // For group chats: { "sender_phone": "taskId" } - per-sender active task tracking
   messages             Message[]
 
   @@index([conversationId])
@@ -307,4 +308,25 @@ model ScheduledJob {
 
   @@index([userId])
   @@index([enabled, nextRunAt])
+}
+
+// ============================================
+// Group Chat Settings
+// ============================================
+
+model GroupChatSettings {
+  id             String @id @default(cuid())
+  conversationId String @unique // Links to Conversation.conversationId (group_id)
+
+  // Response behavior
+  respondOnlyWhenMentioned Boolean  @default(true) // Only respond when directly mentioned
+  mentionKeywords          String[] // Custom trigger keywords (e.g. ["mr whiskers", "whiskers"])
+
+  // Proactive settings
+  allowProactiveMessages Boolean @default(false) // Can send unprompted messages to this group
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId])
 }

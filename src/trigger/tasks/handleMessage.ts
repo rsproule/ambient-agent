@@ -19,6 +19,8 @@ type HandleMessageResponsePayload = {
   group?: string;
   actions: MessageAction[];
   taskId: string; // Unique ID for this response task
+  sender?: string; // For group chats: the sender phone number (for per-sender locking)
+  isGroup?: boolean; // Whether this is a group chat
 };
 
 export const handleMessageResponse = task({
@@ -33,10 +35,13 @@ export const handleMessageResponse = task({
         const action = payload.actions[i];
 
         // Check for interrupt before each action (except the first)
+        // Note: Group chats with per-sender locking don't use interrupts
         if (i > 0) {
           const interrupted = await shouldInterrupt(
             payload.conversationId,
             payload.taskId,
+            payload.sender,
+            payload.isGroup,
           );
           if (interrupted) {
             console.log(
@@ -69,7 +74,12 @@ export const handleMessageResponse = task({
       };
     } finally {
       // Always release the lock when done (success or failure)
-      await releaseResponseLock(payload.conversationId, payload.taskId);
+      await releaseResponseLock(
+        payload.conversationId,
+        payload.taskId,
+        payload.sender,
+        payload.isGroup,
+      );
     }
   },
 });

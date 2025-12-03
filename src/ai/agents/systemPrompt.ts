@@ -1,3 +1,4 @@
+import type { GroupChatSettingsWithDefaults } from "@/src/db/groupChatSettings";
 import { ONBOARDING_PROMPT } from "./onboardingPrompt";
 
 /**
@@ -163,6 +164,7 @@ export function buildConversationContextPrompt(context: {
   systemState?: SystemState | null;
   groupParticipants?: GroupParticipantInfo[] | null;
   sender?: string; // The authenticated sender (for group chats)
+  groupChatSettings?: GroupChatSettingsWithDefaults | null; // Group chat specific settings
 }): string {
   const parts: string[] = [];
 
@@ -204,6 +206,44 @@ export function buildConversationContextPrompt(context: {
     parts.push(
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
     );
+
+    // Group chat settings - configurable behavior
+    if (context.groupChatSettings) {
+      parts.push("");
+      parts.push("GROUP CHAT SETTINGS:");
+
+      if (context.groupChatSettings.respondOnlyWhenMentioned) {
+        parts.push("- Mode: RESPOND ONLY WHEN MENTIONED");
+        parts.push(
+          `- Trigger keywords: ${context.groupChatSettings.mentionKeywords.join(
+            ", ",
+          )}`,
+        );
+        parts.push(
+          "- If your name/keywords aren't mentioned, return [] (no response)",
+        );
+        parts.push(
+          "- Check each message - only respond if it contains a trigger keyword",
+        );
+      } else {
+        parts.push("- Mode: RESPOND TO ALL RELEVANT MESSAGES");
+        parts.push(
+          "- You may respond to any message where you have valuable input",
+        );
+        parts.push("- Still follow group chat etiquette - don't spam");
+      }
+
+      if (context.groupChatSettings.allowProactiveMessages) {
+        parts.push("- Proactive messages: ALLOWED in this group");
+      } else {
+        parts.push("- Proactive messages: NOT ALLOWED in this group");
+      }
+
+      parts.push("");
+      parts.push(
+        "Note: Users can change these settings by asking you to update them.",
+      );
+    }
 
     // Group participant identities (show this first so CURRENT SENDER can reference it)
     if (context.groupParticipants && context.groupParticipants.length > 0) {
@@ -303,7 +343,7 @@ export function buildConversationContextPrompt(context: {
     parts.push("SYSTEM STATE:");
 
     if (!context.systemState.hasAnyConnection) {
-      // No connections at all - aggressively push connection link
+      // No connections at all
       parts.push("⚠️ USER HAS NO CONNECTED ACCOUNTS");
       parts.push(
         "- The user hasn't connected any accounts (Gmail, GitHub, Calendar)",
@@ -311,17 +351,25 @@ export function buildConversationContextPrompt(context: {
       parts.push(
         "- You can do much more if they connect - research them, check emails, manage calendar, etc.",
       );
-      parts.push("");
-      parts.push(
-        "🚨 MANDATORY: If this is NOT the first message in the conversation:",
-      );
-      parts.push(
-        "- You MUST call generateConnectionLink and include the link in your response",
-      );
-      parts.push("- Do this EVERY response until they connect");
-      parts.push(
-        "- Work it naturally into the conversation but always include it",
-      );
+
+      // Only push connection links in DMs, never in group chats
+      if (!context.isGroup) {
+        parts.push("");
+        parts.push(
+          "🚨 MANDATORY: If this is NOT the first message in the conversation:",
+        );
+        parts.push(
+          "- You MUST call generateConnectionLink and include the link in your response",
+        );
+        parts.push("- Do this EVERY response until they connect");
+        parts.push(
+          "- Work it naturally into the conversation but always include it",
+        );
+      } else {
+        parts.push("");
+        parts.push("Note: Connection links are not available in group chats.");
+        parts.push("- If a user wants to connect, ask them to DM you directly");
+      }
     } else {
       // Has some connections - just note what's available, don't nag about missing ones
       const connected: string[] = [];
