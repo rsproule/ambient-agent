@@ -1,7 +1,6 @@
-import { getUserById, listUsers } from "@/src/db/user";
+import { getUserById } from "@/src/db/user";
 import type { MessageTarget } from "@/src/lib/message-queue/types";
 import {
-  isGlobalTarget,
   isSegmentTarget,
   isUserTarget,
 } from "@/src/lib/message-queue/types";
@@ -16,7 +15,6 @@ export interface Recipient {
  * Resolve recipients based on target type
  *
  * - For user_id: Returns single user if they have a phone number
- * - For global: Returns all users with phone numbers
  * - For segment: Currently placeholder - returns empty array (implement segment logic as needed)
  *
  * @param target The message target
@@ -27,8 +25,6 @@ export async function resolveRecipients(
 ): Promise<Recipient[]> {
   if (isUserTarget(target)) {
     return resolveUserRecipient(target.userId);
-  } else if (isGlobalTarget(target)) {
-    return resolveGlobalRecipients();
   } else if (isSegmentTarget(target)) {
     return resolveSegmentRecipients(target.segmentId);
   }
@@ -59,31 +55,6 @@ async function resolveUserRecipient(userId: string): Promise<Recipient[]> {
       phoneNumber: user.phoneNumber,
     },
   ];
-}
-
-/**
- * Resolve all users for global broadcast
- * Only includes users with phone numbers
- */
-async function resolveGlobalRecipients(): Promise<Recipient[]> {
-  // Get all users (paginated - adjust limit as needed)
-  // For production, you may want to implement proper pagination
-  const users = await listUsers(1000, 0);
-
-  // Filter users who have phone numbers
-  const recipients: Recipient[] = users
-    .filter((user) => user.phoneNumber)
-    .map((user) => ({
-      userId: user.id,
-      conversationId: user.phoneNumber!, // Safe because we filtered
-      phoneNumber: user.phoneNumber!,
-    }));
-
-  console.log(
-    `Resolved ${recipients.length} recipients for global broadcast (out of ${users.length} total users)`,
-  );
-
-  return recipients;
 }
 
 /**

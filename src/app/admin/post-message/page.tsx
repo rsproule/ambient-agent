@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-type TargetType = "user_id" | "global" | "segment";
+type TargetType = "user_id" | "segment";
 
 interface User {
   id: string;
@@ -57,9 +57,6 @@ export default function PostMessagePage() {
       switch (targetType) {
         case "user_id":
           target = { type: "user_id", userId }; // userId here is the UUID from the dropdown
-          break;
-        case "global":
-          target = { type: "global" };
           break;
         case "segment":
           target = { type: "segment", segmentId };
@@ -145,7 +142,6 @@ export default function PostMessagePage() {
                 required
               >
                 <option value="user_id">User ID</option>
-                <option value="global">Global</option>
                 <option value="segment">Segment</option>
               </select>
             </div>

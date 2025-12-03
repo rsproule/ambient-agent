@@ -16,20 +16,12 @@ export type PhoneTarget = {
   phoneNumber: string;
 };
 
-export type GlobalTarget = {
-  type: "global";
-};
-
 export type SegmentTarget = {
   type: "segment";
   segmentId: string;
 };
 
-export type MessageTarget =
-  | UserTarget
-  | PhoneTarget
-  | GlobalTarget
-  | SegmentTarget;
+export type MessageTarget = UserTarget | PhoneTarget | SegmentTarget;
 
 // Bribe/Payment payload (optional)
 export interface BribePayload {
@@ -79,10 +71,6 @@ export function isUserTarget(target: MessageTarget): target is UserTarget {
 
 export function isPhoneTarget(target: MessageTarget): target is PhoneTarget {
   return target.type === "phone_number";
-}
-
-export function isGlobalTarget(target: MessageTarget): target is GlobalTarget {
-  return target.type === "global";
 }
 
 export function isSegmentTarget(
