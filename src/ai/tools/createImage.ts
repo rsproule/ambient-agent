@@ -42,9 +42,13 @@ type ImageQuality = keyof typeof IMAGE_MODELS;
 export const createImageTool = tool({
   description:
     "Generate or edit images using AI. " +
-    "For NEW images: provide just a prompt. " +
-    "For EDITING an existing image: YOU MUST provide imageUrl (copy the exact URL from an image in the conversation) plus a prompt describing the edit. " +
-    "IMPORTANT: If the user wants to modify/edit/change an existing image, you MUST pass that image's URL in imageUrl. " +
+    "For NEW images from scratch: provide just a prompt. " +
+    "For EDITING/USING an existing image: provide imageUrl + prompt. " +
+    "IMAGE SOURCES - pass any of these as imageUrl: " +
+    "1) URLs from webSearch results (images array or imageUrl fields), " +
+    "2) URLs from conversation attachments, " +
+    "3) URLs you previously generated. " +
+    "IMPORTANT: If user references a person/thing you found via webSearch, USE that image URL! " +
     "Choose 'fast' for quick images, 'pro' for complex detailed artwork.",
   inputSchema: zodSchema(
     z.object({

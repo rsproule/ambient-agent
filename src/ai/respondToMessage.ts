@@ -207,10 +207,13 @@ export async function respondToMessage(
         // Log tool calls from this step
         if (step.toolCalls && step.toolCalls.length > 0) {
           step.toolCalls.forEach((toolCall) => {
-            console.log(`[${agent.name}] Tool call in step ${stepIdx + 1}:`, {
-              tool: toolCall.toolName,
-              input: toolCall.input,
-            });
+            console.log(
+              `[${agent.name}] Tool call in step ${stepIdx + 1}:\n${JSON.stringify(
+                { tool: toolCall.toolName, input: toolCall.input },
+                null,
+                2
+              )}`
+            );
           });
         }
 
@@ -228,20 +231,23 @@ export async function respondToMessage(
               output.success === false
             ) {
               console.error(
-                `[${agent.name}] ❌ Tool FAILED in step ${stepIdx + 1}:`,
-                {
-                  tool: toolResult.toolName,
-                  error: output.message || "Unknown error",
-                  fullOutput: toolResult.output,
-                },
+                `[${agent.name}] ❌ Tool FAILED in step ${stepIdx + 1}:\n${JSON.stringify(
+                  {
+                    tool: toolResult.toolName,
+                    error: output.message || "Unknown error",
+                    fullOutput: toolResult.output,
+                  },
+                  null,
+                  2
+                )}`
               );
             } else {
               console.log(
-                `[${agent.name}] ✅ Tool result in step ${stepIdx + 1}:`,
-                {
-                  tool: toolResult.toolName,
-                  output: toolResult.output,
-                },
+                `[${agent.name}] ✅ Tool result in step ${stepIdx + 1}:\n${JSON.stringify(
+                  { tool: toolResult.toolName, output: toolResult.output },
+                  null,
+                  2
+                )}`
               );
             }
           });
