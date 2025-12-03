@@ -18,10 +18,12 @@
 export { createCompleteOnboardingTool } from "./completeOnboarding";
 export { createGenerateConnectionLinkTool } from "./generateConnectionLink";
 export { createGetUserContextTool } from "./getUserContext";
-export { createImageTool } from "./createImage";
 export { createRequestResearchTool } from "./requestResearch";
 export { createUpdateUserContextTool } from "./updateUserContext";
 export { createScheduledJobTools } from "./scheduledJob";
+
+// Static tools (no context needed - Claude can see images directly)
+export { createImageTool } from "./createImage";
 
 // Integration tools (context-bound)
 export { createCalendarTools } from "./calendar";

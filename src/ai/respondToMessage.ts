@@ -6,7 +6,6 @@ import {
   createGetUserContextTool,
   createGitHubTools,
   createGmailTools,
-  createImageTool,
   createRequestResearchTool,
   createScheduledJobTools,
   createUpdateUserContextTool,
@@ -55,7 +54,6 @@ export async function respondToMessage(
     generateConnectionLink: createGenerateConnectionLinkTool(context),
     requestResearch: createRequestResearchTool(context),
     completeOnboarding: createCompleteOnboardingTool(context),
-    createImage: createImageTool(context),
     ...createScheduledJobTools(context),
   };
 
@@ -133,8 +131,56 @@ export async function respondToMessage(
     }
   }
 
+  // Prepend recent images so Claude can visually "see" them
+  // This allows Claude to understand image content when user says "make it brighter" etc.
+  let messagesWithImageContext = messages;
+  
+  // Debug: Log attachment collection status
   console.log(
-    `[${agent.name}] Calling ToolLoopAgent.generate() with ${messages.length} messages...`,
+    `[${agent.name}] recentAttachments:`,
+    context.recentAttachments?.length ?? 0,
+    context.recentAttachments || "none"
+  );
+  
+  if (context.recentAttachments && context.recentAttachments.length > 0) {
+    // Include up to 3 most recent images for context (to limit token usage)
+    const imagesToShow = context.recentAttachments.slice(0, 3);
+    // Build content with labeled images and their URLs
+    const imageContent: Array<{ type: "text"; text: string } | { type: "image"; image: URL }> = [
+      {
+        type: "text",
+        text: `[CONTEXT: Recent images in this conversation. When user asks to edit/modify an image, use createImage with the image's URL:]`,
+      },
+    ];
+    
+    imagesToShow.forEach((url, i) => {
+      imageContent.push({ type: "text", text: `[Image ${i} URL: ${url}]` });
+      imageContent.push({ type: "image", image: new URL(url) });
+    });
+
+    const imageContextMessage: ModelMessage = {
+      role: "user",
+      content: imageContent,
+    };
+
+    // Insert image context at the beginning, followed by an assistant acknowledgment
+    messagesWithImageContext = [
+      imageContextMessage,
+      {
+        role: "assistant",
+        content:
+          "[Acknowledged - I can see these images. If asked to edit one, I'll use createImage with the image's URL.]",
+      } as ModelMessage,
+      ...messages,
+    ];
+
+    console.log(
+      `[${agent.name}] Added ${imagesToShow.length} image(s) to context for visual awareness`,
+    );
+  }
+
+  console.log(
+    `[${agent.name}] Calling ToolLoopAgent.generate() with ${messagesWithImageContext.length} messages...`,
   );
   console.log(
     `[${agent.name}] Agent config:`,
@@ -149,7 +195,7 @@ export async function respondToMessage(
     // Generate response - the agent handles tool calling and structured output automatically
     // Use messages parameter (accepts ModelMessage[])
     const result = await loopAgent.generate({
-      messages,
+      messages: messagesWithImageContext,
     });
 
     const after = performance.now();
