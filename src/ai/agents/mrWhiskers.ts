@@ -16,7 +16,7 @@ const anthropic = createAnthropic({
  * NOTE: This agent includes static tools (createImage, webSearch).
  * Context-bound tools (getUserContext, updateUserContext, scheduledJobs, etc.)
  * are added dynamically in respondToMessage based on the conversation context.
- * 
+ *
  * createImage is static because Claude can now SEE images in the conversation
  * (they're prepended as visual context), so it knows which URL to pass.
  */

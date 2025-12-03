@@ -1,8 +1,15 @@
 "use client"
 
 import * as React from "react"
-import type { WebSearchItem } from "./schema"
 import { Loader } from "@/src/components/loader"
+
+// Inline type since we simplified the tool to return raw Perplexity results
+interface WebSearchItem {
+  title: string
+  url: string
+  snippet?: string
+  source?: string
+}
 import { CodeBlock } from "@/src/components/code-block"
 import {
   InlineCitationCard,
