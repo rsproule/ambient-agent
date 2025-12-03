@@ -6,6 +6,7 @@ import {
   createGetUserContextTool,
   createGitHubTools,
   createGmailTools,
+  createImageTool,
   createRequestResearchTool,
   createScheduledJobTools,
   createUpdateUserContextTool,
@@ -54,6 +55,7 @@ export async function respondToMessage(
     generateConnectionLink: createGenerateConnectionLinkTool(context),
     requestResearch: createRequestResearchTool(context),
     completeOnboarding: createCompleteOnboardingTool(context),
+    createImage: createImageTool(context),
     ...createScheduledJobTools(context),
   };
 

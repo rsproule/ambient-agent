@@ -1,3 +1,4 @@
+import type { ConversationContext } from "@/src/db/conversation";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { put } from "@vercel/blob";
 import { generateText, tool, zodSchema } from "ai";
@@ -31,103 +32,176 @@ const IMAGE_MODELS = {
 type ImageQuality = keyof typeof IMAGE_MODELS;
 
 /**
- * Tool for generating images using Google's Gemini model
+ * Create context-bound createImage tool
  *
- * Allows the agent to create images from text prompts using either:
- * - "fast" mode (nano-banano): Quick generation for simple requests
- * - "pro" mode (nano-banano pro): Higher quality for complex/detailed images
+ * This tool can generate new images OR edit existing images from the conversation.
+ * When editing, it uses the recentAttachments from the conversation context
+ * so the agent doesn't need to hallucinate URLs.
  *
- * Uploads generated images to Vercel Blob storage and returns the URL.
+ * Modes:
+ * - "fast" (nano-banano): Quick generation for simple requests
+ * - "pro" (nano-banano pro): Higher quality for complex/detailed images
  */
-export const createImageTool = tool({
-  description:
-    "Generate an image from a text prompt using AI. " +
-    "Use this to create visual content based on descriptions. " +
-    "Choose 'fast' mode for quick simple images, or 'pro' mode for complex detailed artwork. " +
-    "Returns the generated image URL and metadata.",
-  inputSchema: zodSchema(
-    z.object({
-      prompt: z
-        .string()
-        .describe("The text prompt describing the image to generate"),
-      quality: z
-        .enum(["fast", "pro"])
-        .default("fast")
-        .describe(
-          "Image generation quality: 'fast' for quick simple images (default), 'pro' for complex detailed artwork requiring higher quality",
-        ),
-    }),
-  ),
-  execute: async ({ prompt, quality = "fast" }) => {
-    const modelName = IMAGE_MODELS[quality as ImageQuality];
-    console.log(
-      `[createImage] Generating image with ${quality} mode (${modelName}) for prompt:`,
-      prompt,
-    );
+export function createImageTool(context: ConversationContext) {
+  const attachments = context.recentAttachments || [];
+  const hasAttachments = attachments.length > 0;
 
-    try {
-      // Echo currently doesnt support pro models
-      // const apiKey = process.env.ECHO_API_KEY;
+  // Build description dynamically based on available attachments
+  const attachmentInfo = hasAttachments
+    ? `\n\nAVAILABLE IMAGES (use attachmentIndex to edit, 0 = most recent):\n${attachments
+        .map((url, i) => `  ${i}: ${url}`)
+        .join("\n")}`
+    : "\n\nNo image attachments available in this conversation yet.";
 
-      const google = createGoogleGenerativeAI({
-        // baseURL: "https://echo.router.merit.systems",
-        // apiKey,
-      });
+  return tool({
+    description:
+      "Generate or edit images using AI. " +
+      "For NEW images: provide just a prompt describing what to create. " +
+      "For EDITING: set attachmentIndex to select which image (0 = most recent), plus a prompt describing the edit. " +
+      "Images include both user-sent attachments AND images you previously generated. " +
+      "Choose 'fast' mode for quick simple images, or 'pro' mode for complex detailed artwork. " +
+      "Returns the generated/edited image URL." +
+      attachmentInfo,
+    inputSchema: zodSchema(
+      z.object({
+        prompt: z
+          .string()
+          .describe(
+            "The text prompt - either describing the image to generate, or the edit to apply to an existing image",
+          ),
+        attachmentIndex: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            "Index of the attachment to edit (0 = most recent image the user sent). Only use this when editing an existing image from the conversation.",
+          ),
+        quality: z
+          .enum(["fast", "pro"])
+          .default("fast")
+          .describe(
+            "Image generation quality: 'fast' for quick simple images (default), 'pro' for complex detailed artwork requiring higher quality",
+          ),
+      }),
+    ),
+    execute: async ({ prompt, attachmentIndex, quality = "fast" }) => {
+      const modelName = IMAGE_MODELS[quality as ImageQuality];
 
-      const result = await generateText({
-        model: google(modelName),
-        prompt,
-      });
+      // Resolve attachment URL if editing
+      let imageUrl: string | undefined;
+      if (attachmentIndex !== undefined) {
+        if (attachments.length === 0) {
+          return {
+            success: false,
+            message:
+              "No image attachments available in this conversation. Cannot edit without a source image.",
+          };
+        }
+        if (attachmentIndex >= attachments.length) {
+          return {
+            success: false,
+            message: `Invalid attachment index ${attachmentIndex}. Only ${
+              attachments.length
+            } attachment(s) available (indices 0-${attachments.length - 1}).`,
+          };
+        }
+        imageUrl = attachments[attachmentIndex];
+      }
 
-      // Filter to only image files
-      const imageFiles = result.files?.filter((file) =>
-        file.mediaType.startsWith("image/"),
+      const isEditing = !!imageUrl;
+      console.log(
+        `[createImage] ${
+          isEditing ? "Editing" : "Generating"
+        } image with ${quality} mode (${modelName})`,
+        isEditing ? `\n  Source: ${imageUrl}` : "",
+        `\n  Prompt: ${prompt}`,
       );
 
-      if (!imageFiles || imageFiles.length === 0) {
+      try {
+        // Echo currently doesnt support pro models
+        // const apiKey = process.env.ECHO_API_KEY;
+
+        const google = createGoogleGenerativeAI({
+          // baseURL: "https://echo.router.merit.systems",
+          // apiKey,
+        });
+
+        // Build messages based on whether we're editing or generating
+        const messages = isEditing
+          ? [
+              {
+                role: "user" as const,
+                content: [
+                  { type: "image" as const, image: new URL(imageUrl!) },
+                  { type: "text" as const, text: prompt },
+                ],
+              },
+            ]
+          : [
+              {
+                role: "user" as const,
+                content: prompt,
+              },
+            ];
+
+        const result = await generateText({
+          model: google(modelName),
+          messages,
+        });
+
+        // Filter to only image files
+        const imageFiles = result.files?.filter((file) =>
+          file.mediaType.startsWith("image/"),
+        );
+
+        if (!imageFiles || imageFiles.length === 0) {
+          return {
+            success: false,
+            message: "No images were generated",
+          };
+        }
+
+        const firstImage = imageFiles[0];
+
+        if (!firstImage.base64) {
+          return {
+            success: false,
+            message: "Image was generated but no base64 data was returned",
+          };
+        }
+
+        // Convert base64 to buffer for upload
+        const imageBuffer = base64ToBuffer(firstImage.base64);
+
+        // Upload to Vercel Blob
+        const filename = `generated-image-${Date.now()}.png`;
+        const blob = await put(filename, imageBuffer, {
+          access: "public",
+          contentType: firstImage.mediaType,
+        });
+
+        console.log("[createImage] Image uploaded successfully:", blob.url);
+
+        // Return the blob URL which can be used directly in attachments
+        const action = isEditing ? "edited" : "generated";
+        return {
+          success: true,
+          url: blob.url,
+          mediaType: firstImage.mediaType,
+          quality,
+          wasEdit: isEditing,
+          message: `Image ${action} with ${quality} mode and uploaded successfully (${firstImage.mediaType}). Use this URL in the 'attachments' array: ${blob.url}`,
+        };
+      } catch (error) {
+        console.error("[createImage] Error:", error);
         return {
           success: false,
-          message: "No images were generated",
+          message: `Failed to generate image: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`,
         };
       }
-
-      const firstImage = imageFiles[0];
-
-      if (!firstImage.base64) {
-        return {
-          success: false,
-          message: "Image was generated but no base64 data was returned",
-        };
-      }
-
-      // Convert base64 to buffer for upload
-      const imageBuffer = base64ToBuffer(firstImage.base64);
-
-      // Upload to Vercel Blob
-      const filename = `generated-image-${Date.now()}.png`;
-      const blob = await put(filename, imageBuffer, {
-        access: "public",
-        contentType: firstImage.mediaType,
-      });
-
-      console.log("[createImage] Image uploaded successfully:", blob.url);
-
-      // Return the blob URL which can be used directly in attachments
-      return {
-        success: true,
-        url: blob.url,
-        mediaType: firstImage.mediaType,
-        quality,
-        message: `Image generated with ${quality} mode and uploaded successfully (${firstImage.mediaType}). Use this URL in the 'attachments' array: ${blob.url}`,
-      };
-    } catch (error) {
-      console.error("[createImage] Error:", error);
-      return {
-        success: false,
-        message: `Failed to generate image: ${
-          error instanceof Error ? error.message : "Unknown error"
-        }`,
-      };
-    }
-  },
-});
+    },
+  });
+}

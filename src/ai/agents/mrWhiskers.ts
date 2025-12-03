@@ -1,4 +1,3 @@
-import { createImageTool } from "@/src/ai/tools";
 import { webSearchPerplexityTool } from "@/src/components/ai-tools/websearch/tool";
 import { IMessageResponseSchema } from "@/src/lib/loopmessage-sdk/actions";
 import { createAnthropic } from "@ai-sdk/anthropic";
@@ -13,10 +12,11 @@ const anthropic = createAnthropic({
 /**
  * Base Mr. Whiskers agent configuration.
  *
- * NOTE: This agent only includes static tools (createImage, webSearch).
- * Context-bound tools (getUserContext, updateUserContext, scheduledJobs, etc.)
+ * NOTE: This agent only includes static tools (webSearch).
+ * Context-bound tools (getUserContext, updateUserContext, createImage, scheduledJobs, etc.)
  * are added dynamically in respondToMessage based on the conversation context.
- * This ensures user identity comes from system context (cannot be spoofed).
+ * This ensures user identity comes from system context (cannot be spoofed)
+ * and createImage can access conversation attachments.
  */
 export const mrWhiskersAgent = createAgent({
   personality: mrWhiskersPersonality,
@@ -24,7 +24,6 @@ export const mrWhiskersAgent = createAgent({
   schema: IMessageResponseSchema,
   tools: {
     // Static tools (no user identity needed)
-    createImage: createImageTool,
     webSearch: webSearchPerplexityTool,
   },
 });

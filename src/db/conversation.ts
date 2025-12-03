@@ -62,6 +62,7 @@ export interface ConversationContext {
   userContext?: UserResearchContext | null; // Research-based user context
   systemState?: SystemState | null; // Connection status and other system state
   groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
+  recentAttachments?: string[]; // URLs of recent image attachments from the conversation (most recent first)
 }
 
 /**
@@ -413,6 +414,25 @@ export async function getConversationMessages(
     };
   }
 
+  // Collect recent image attachments from BOTH user messages AND assistant-generated images
+  // This allows tools like createImage to access actual attachment URLs for editing
+  // Most recent first, so the agent can reference "the image I just sent" easily
+  const recentAttachments = [...messages]
+    .reverse() // Most recent first
+    .flatMap((msg) => {
+      // User messages: get direct attachments
+      if (msg.role === "user" && msg.attachments?.length > 0) {
+        return msg.attachments;
+      }
+      // Assistant messages: extract attachments from actions in content
+      if (msg.role === "assistant" && typeof msg.content === "object") {
+        return extractAssistantAttachments(msg.content);
+      }
+      return [];
+    })
+    .filter(isSupportedImageFormat)
+    .slice(0, 10); // Limit to 10 most recent
+
   return {
     messages: formattedMessages,
     context: {
@@ -425,6 +445,7 @@ export async function getConversationMessages(
       userContext,
       systemState,
       groupParticipants,
+      recentAttachments: recentAttachments.length > 0 ? recentAttachments : undefined,
     },
   };
 }
@@ -475,6 +496,70 @@ function formatMessageForAI(
 }
 
 /**
+ * Extract attachment URLs from assistant message content
+ * Assistant messages contain actions with attachments arrays
+ */
+function extractAssistantAttachments(content: unknown): string[] {
+  try {
+    // Content should be { actions: [...] } structure
+    if (typeof content !== "object" || content === null) {
+      return [];
+    }
+
+    const contentObj = content as { actions?: unknown[] };
+    if (!Array.isArray(contentObj.actions)) {
+      return [];
+    }
+
+    // Extract attachments from each action
+    return contentObj.actions
+      .filter(
+        (action): action is { type: string; attachments?: string[] } =>
+          typeof action === "object" &&
+          action !== null &&
+          (action as { type?: string }).type === "message"
+      )
+      .flatMap((action) => action.attachments || []);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Supported image formats for Claude API
+ * HEIC, TIFF, BMP, and other formats are NOT supported
+ */
+const SUPPORTED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".gif", ".webp"];
+
+/**
+ * Check if a URL points to a supported image format
+ */
+function isSupportedImageFormat(url: string): boolean {
+  try {
+    const urlLower = url.toLowerCase();
+    // Check file extension
+    const hasExtension = SUPPORTED_IMAGE_EXTENSIONS.some((ext) =>
+      urlLower.includes(ext)
+    );
+    if (hasExtension) return true;
+
+    // Check for common image MIME types in URL params (e.g., content-type)
+    if (
+      urlLower.includes("image/jpeg") ||
+      urlLower.includes("image/png") ||
+      urlLower.includes("image/gif") ||
+      urlLower.includes("image/webp")
+    ) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Build message content with attachments and message ID
  */
 function buildMessageContent(msg: {
@@ -501,6 +586,12 @@ function buildMessageContent(msg: {
       : msg.content;
   }
 
+  // Separate supported images from unsupported attachments
+  const supportedImages = msg.attachments.filter(isSupportedImageFormat);
+  const unsupportedAttachments = msg.attachments.filter(
+    (url) => !isSupportedImageFormat(url)
+  );
+
   // Multi-part message with attachments
   const parts: Array<
     { type: "text"; text: string } | { type: "image"; image: string }
@@ -514,8 +605,18 @@ function buildMessageContent(msg: {
     parts.push({ type: "text", text: msg.content });
   }
 
-  for (const url of msg.attachments) {
+  // Add supported images as image parts
+  for (const url of supportedImages) {
     parts.push({ type: "image", image: url });
+  }
+
+  // Mention unsupported attachments as text so the AI knows about them
+  if (unsupportedAttachments.length > 0) {
+    const attachmentNote =
+      unsupportedAttachments.length === 1
+        ? "[User also sent an attachment in an unsupported format (e.g., HEIC, video, audio)]"
+        : `[User also sent ${unsupportedAttachments.length} attachments in unsupported formats (e.g., HEIC, video, audio)]`;
+    parts.push({ type: "text", text: attachmentNote });
   }
 
   return parts;
