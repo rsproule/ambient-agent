@@ -1,11 +1,11 @@
 import {
   Calendar,
+  Clock,
   Github,
   ImageIcon,
   Mail,
   MessageCircle,
   Search,
-  Clock,
 } from "lucide-react";
 import Image from "next/image";
 
@@ -42,11 +42,20 @@ export default function FeaturesPage() {
             </h2>
             <div className="space-y-3">
               {[
-                { icon: Calendar, text: "Google Calendar: view, create, and manage events" },
+                {
+                  icon: Calendar,
+                  text: "Google Calendar: view, create, and manage events",
+                },
                 { icon: Mail, text: "Gmail: search, read, and send emails" },
-                { icon: Github, text: "GitHub: check repos, PRs, and activity" },
+                {
+                  icon: Github,
+                  text: "GitHub: check repos, PRs, and activity",
+                },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 text-foreground">
+                <div
+                  key={i}
+                  className="flex items-center gap-3 text-foreground"
+                >
                   <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
                   <span className="text-sm">{item.text}</span>
                 </div>
@@ -62,9 +71,15 @@ export default function FeaturesPage() {
               {[
                 { icon: Search, text: "Web search with real-time results" },
                 { icon: ImageIcon, text: "Generate and edit images from text" },
-                { icon: Clock, text: "Schedule recurring tasks in natural language" },
+                {
+                  icon: Clock,
+                  text: "Schedule recurring tasks in natural language",
+                },
               ].map((item, i) => (
-                <div key={i} className="flex items-center gap-3 text-foreground">
+                <div
+                  key={i}
+                  className="flex items-center gap-3 text-foreground"
+                >
                   <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
                   <span className="text-sm">{item.text}</span>
                 </div>
@@ -74,8 +89,8 @@ export default function FeaturesPage() {
 
           <div className="pt-4 border-t border-border">
             <p className="text-sm text-muted-foreground mb-1">
-              Works in DMs and group chats. Remembers your preferences. 
-              Gets smarter over time.
+              Works in DMs and group chats. Remembers your preferences. Gets
+              smarter over time.
             </p>
             <p className="text-sm text-muted-foreground">
               Missing something? Just ask. Requests help us build what matters.
