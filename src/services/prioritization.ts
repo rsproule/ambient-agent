@@ -1,12 +1,12 @@
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { generateObject } from "ai";
-import { z } from "zod";
 import {
-  getPrioritizationConfig,
   createMessageEvaluation,
+  getPrioritizationConfig,
   type CreateMessageEvaluationInput,
 } from "@/src/db/prioritization";
 import type { QueuedMessage } from "@/src/lib/message-queue/types";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { generateObject } from "ai";
+import { z } from "zod";
 
 const anthropic = createAnthropic({
   apiKey: process.env.ECHO_API_KEY,
@@ -56,8 +56,12 @@ Examples:
  * Schema for AI response
  */
 const MessageValueSchema = z.object({
-  value: z.number().describe("The dollar value of this message (can be negative)"),
-  reason: z.string().describe("Brief explanation of why this value was assigned"),
+  value: z
+    .number()
+    .describe("The dollar value of this message (can be negative)"),
+  reason: z
+    .string()
+    .describe("Brief explanation of why this value was assigned"),
 });
 
 export interface EvaluationResult {
@@ -71,14 +75,14 @@ export interface EvaluationResult {
 
 /**
  * Evaluate a message for a specific conversation
- * 
+ *
  * This function:
  * 1. Fetches the prioritization config for the conversation
  * 2. Uses AI to calculate the base value of the message
  * 3. Adds any bribe amount to the base value
  * 4. Checks if total value meets the threshold
  * 5. Stores the evaluation in the database
- * 
+ *
  * @param queuedMessage The message to evaluate
  * @param conversationId The conversation to evaluate for (phone number or group_id)
  * @returns Evaluation result with pass/fail and values
@@ -92,7 +96,8 @@ export async function evaluateMessage(
   // Get prioritization config (or use defaults)
   const config = await getPrioritizationConfig(conversationId);
 
-  const threshold = config?.minimumNotifyPrice ?? DEFAULT_CONFIG.minimumNotifyPrice;
+  const threshold =
+    config?.minimumNotifyPrice ?? DEFAULT_CONFIG.minimumNotifyPrice;
   const isEnabled = config?.isEnabled ?? DEFAULT_CONFIG.isEnabled;
 
   // If prioritization is disabled, always pass
@@ -147,7 +152,9 @@ export async function evaluateMessage(
   console.log(
     `[Prioritization] Message ${queuedMessage.id} evaluated for ${conversationId}: ` +
       `baseValue=$${baseValue.value}, bribe=$${bribeAmount}, total=$${totalValue}, ` +
-      `threshold=$${threshold}, passed=${passed} (${Math.round(after - before)}ms)`,
+      `threshold=$${threshold}, passed=${passed} (${Math.round(
+        after - before,
+      )}ms)`,
   );
 
   return evaluation;
@@ -238,7 +245,6 @@ async function storeEvaluation(
 
 /**
  * Batch evaluate a message for multiple conversations
- * Useful for global/segment messages
  */
 export async function evaluateMessageForRecipients(
   queuedMessage: QueuedMessage,
@@ -260,9 +266,10 @@ export async function evaluateMessageForRecipients(
   }
 
   console.log(
-    `[Prioritization] Batch evaluation complete: ${evaluations.filter((e) => e.result.passed).length}/${evaluations.length} passed`,
+    `[Prioritization] Batch evaluation complete: ${
+      evaluations.filter((e) => e.result.passed).length
+    }/${evaluations.length} passed`,
   );
 
   return results;
 }
-

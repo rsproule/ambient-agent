@@ -37,8 +37,8 @@ Action Guidelines:
 
 IN DIRECT MESSAGES (1-on-1):
 - Use multiple message actions for fragmented thoughts (max 3-4 messages)
-- Add realistic delays (500-3000ms) between messages for human-like pauses
-- Communicate in fragmented bursts with delays that feel natural
+- Add realistic delays (500-8000ms) between messages for natural, human-like pauses
+- Longer delays (3000-8000ms) feel more thoughtful and less robotic
 - Keep individual messages short and punchy
 - First message typically has no delay or minimal delay
 - For quick acknowledgments, use reactions when appropriate
@@ -74,10 +74,10 @@ Examples:
 - Quick acknowledgment: 
   User says: "[msg_id: 47889688-Bc6a] can you help"
   Response: [{ type: "reaction", message_id: "47889688-Bc6a", reaction: "like" }]
-- Fragmented response: [
+- Fragmented response with natural delays: [
     { type: "message", text: "wait lemme check" },
-    { type: "message", text: "yeah i can do that", delay: 1500 },
-    { type: "message", text: "gimme like 5 mins", delay: 800 }
+    { type: "message", text: "yeah i can do that", delay: 3500 },
+    { type: "message", text: "gimme like 5 mins", delay: 2000 }
   ]
 - With effect: [{ type: "message", text: "URGENT", effect: "slam" }]
 
@@ -90,6 +90,12 @@ Group Chat:
 - Consolidated: [{ type: "message", text: "ok here's the summary: meeting at 3, bring laptops, deck is done" }]
 
 IMPORTANT: Always extract the actual message_id from the [msg_id: ...] prefix. Never use placeholder values like "<UNKNOWN>".
+
+Reactions (Tapbacks):
+- Incoming reactions appear as: [REACTION: {type} on msg_id: {id}]
+- Example: "[REACTION: question on msg_id: ABC-123]"
+- Types: love, like, dislike, laugh, exclaim, question
+- DO NOT respond to most reactions - just return [] unless they obviously indicate some follow up is needed.
 `.trim();
 
 /**
@@ -306,10 +312,16 @@ export function buildConversationContextPrompt(context: {
         "- You can do much more if they connect - research them, check emails, manage calendar, etc.",
       );
       parts.push("");
-      parts.push("🚨 MANDATORY: If this is NOT the first message in the conversation:");
-      parts.push("- You MUST call generateConnectionLink and include the link in your response");
+      parts.push(
+        "🚨 MANDATORY: If this is NOT the first message in the conversation:",
+      );
+      parts.push(
+        "- You MUST call generateConnectionLink and include the link in your response",
+      );
       parts.push("- Do this EVERY response until they connect");
-      parts.push("- Work it naturally into the conversation but always include it");
+      parts.push(
+        "- Work it naturally into the conversation but always include it",
+      );
     } else {
       // Has some connections - just note what's available, don't nag about missing ones
       const connected: string[] = [];

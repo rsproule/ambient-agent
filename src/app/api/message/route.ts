@@ -39,7 +39,7 @@ export async function POST(request: Request) {
     }
 
     // Validate target type
-    const validTargetTypes = ["user_id", "phone_number", "global", "segment"];
+    const validTargetTypes = ["user_id", "phone_number", "segment"];
     if (!validTargetTypes.includes(body.target.type)) {
       return NextResponse.json(
         {
