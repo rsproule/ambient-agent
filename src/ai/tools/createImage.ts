@@ -22,11 +22,20 @@ function base64ToBuffer(base64DataUrl: string): Buffer {
   return Buffer.from(base64Data, "base64");
 }
 
+// Model configurations for image generation
+const IMAGE_MODELS = {
+  fast: "gemini-2.5-flash-image-preview", // nano-banano: Quick generation for simple requests
+  pro: "gemini-3-pro-image-preview", // nano-banano pro: Higher quality for complex/detailed images
+} as const;
+
+type ImageQuality = keyof typeof IMAGE_MODELS;
+
 /**
  * Tool for generating images using Google's Gemini model
  *
- * Allows the agent to create images from text prompts using the
- * Gemini 2.5 Flash image generation model (nano banana).
+ * Allows the agent to create images from text prompts using either:
+ * - "fast" mode (nano-banano): Quick generation for simple requests
+ * - "pro" mode (nano-banano pro): Higher quality for complex/detailed images
  *
  * Uploads generated images to Vercel Blob storage and returns the URL.
  */
@@ -34,27 +43,39 @@ export const createImageTool = tool({
   description:
     "Generate an image from a text prompt using AI. " +
     "Use this to create visual content based on descriptions. " +
-    "Returns the generated image as a base64 data URL along with metadata.",
+    "Choose 'fast' mode for quick simple images, or 'pro' mode for complex detailed artwork. " +
+    "Returns the generated image URL and metadata.",
   inputSchema: zodSchema(
     z.object({
       prompt: z
         .string()
         .describe("The text prompt describing the image to generate"),
+      quality: z
+        .enum(["fast", "pro"])
+        .default("fast")
+        .describe(
+          "Image generation quality: 'fast' for quick simple images (default), 'pro' for complex detailed artwork requiring higher quality",
+        ),
     }),
   ),
-  execute: async ({ prompt }) => {
-    console.log("[createImage] Generating image for prompt:", prompt);
+  execute: async ({ prompt, quality = "fast" }) => {
+    const modelName = IMAGE_MODELS[quality as ImageQuality];
+    console.log(
+      `[createImage] Generating image with ${quality} mode (${modelName}) for prompt:`,
+      prompt,
+    );
 
     try {
-      const apiKey = process.env.ECHO_API_KEY;
+      // Echo currently doesnt support pro models
+      // const apiKey = process.env.ECHO_API_KEY;
 
       const google = createGoogleGenerativeAI({
-        baseURL: "https://echo.router.merit.systems",
-        apiKey,
+        // baseURL: "https://echo.router.merit.systems",
+        // apiKey,
       });
 
       const result = await generateText({
-        model: google("gemini-2.5-flash-image-preview"),
+        model: google(modelName),
         prompt,
       });
 
@@ -96,7 +117,8 @@ export const createImageTool = tool({
         success: true,
         url: blob.url,
         mediaType: firstImage.mediaType,
-        message: `Image generated and uploaded successfully (${firstImage.mediaType}). Use this URL in the 'attachments' array: ${blob.url}`,
+        quality,
+        message: `Image generated with ${quality} mode and uploaded successfully (${firstImage.mediaType}). Use this URL in the 'attachments' array: ${blob.url}`,
       };
     } catch (error) {
       console.error("[createImage] Error:", error);
