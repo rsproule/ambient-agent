@@ -318,12 +318,9 @@ model GroupChatSettings {
   id             String @id @default(cuid())
   conversationId String @unique // Links to Conversation.conversationId (group_id)
 
-  // Response behavior
-  respondOnlyWhenMentioned Boolean  @default(true) // Only respond when directly mentioned
-  mentionKeywords          String[] // Custom trigger keywords (e.g. ["mr whiskers", "whiskers"])
-
-  // Proactive settings
-  allowProactiveMessages Boolean @default(false) // Can send unprompted messages to this group
+  // Custom behavior prompt - injected into system prompt for this group
+  // Users can describe how they want the AI to behave via natural language
+  customPrompt String? @db.Text
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

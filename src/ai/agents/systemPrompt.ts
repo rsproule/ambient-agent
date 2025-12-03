@@ -1,4 +1,3 @@
-import type { GroupChatSettingsWithDefaults } from "@/src/db/groupChatSettings";
 import { ONBOARDING_PROMPT } from "./onboardingPrompt";
 
 /**
@@ -164,7 +163,7 @@ export function buildConversationContextPrompt(context: {
   systemState?: SystemState | null;
   groupParticipants?: GroupParticipantInfo[] | null;
   sender?: string; // The authenticated sender (for group chats)
-  groupChatSettings?: GroupChatSettingsWithDefaults | null; // Group chat specific settings
+  groupChatCustomPrompt?: string | null; // Custom behavior prompt for this group chat
 }): string {
   const parts: string[] = [];
 
@@ -207,41 +206,14 @@ export function buildConversationContextPrompt(context: {
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
     );
 
-    // Group chat settings - configurable behavior
-    if (context.groupChatSettings) {
+    // Custom group chat behavior (if configured)
+    if (context.groupChatCustomPrompt) {
       parts.push("");
-      parts.push("GROUP CHAT SETTINGS:");
-
-      if (context.groupChatSettings.respondOnlyWhenMentioned) {
-        parts.push("- Mode: RESPOND ONLY WHEN MENTIONED");
-        parts.push(
-          `- Trigger keywords: ${context.groupChatSettings.mentionKeywords.join(
-            ", ",
-          )}`,
-        );
-        parts.push(
-          "- If your name/keywords aren't mentioned, return [] (no response)",
-        );
-        parts.push(
-          "- Check each message - only respond if it contains a trigger keyword",
-        );
-      } else {
-        parts.push("- Mode: RESPOND TO ALL RELEVANT MESSAGES");
-        parts.push(
-          "- You may respond to any message where you have valuable input",
-        );
-        parts.push("- Still follow group chat etiquette - don't spam");
-      }
-
-      if (context.groupChatSettings.allowProactiveMessages) {
-        parts.push("- Proactive messages: ALLOWED in this group");
-      } else {
-        parts.push("- Proactive messages: NOT ALLOWED in this group");
-      }
-
+      parts.push("GROUP CHAT CUSTOM BEHAVIOR:");
+      parts.push(context.groupChatCustomPrompt);
       parts.push("");
       parts.push(
-        "Note: Users can change these settings by asking you to update them.",
+        "Note: Users can update this behavior by asking you to change your group chat settings.",
       );
     }
 

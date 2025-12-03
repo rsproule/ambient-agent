@@ -5,9 +5,7 @@ ALTER TABLE "Conversation" ADD COLUMN "senderLocks" JSONB;
 CREATE TABLE "GroupChatSettings" (
     "id" TEXT NOT NULL,
     "conversationId" TEXT NOT NULL,
-    "respondOnlyWhenMentioned" BOOLEAN NOT NULL DEFAULT true,
-    "mentionKeywords" TEXT[],
-    "allowProactiveMessages" BOOLEAN NOT NULL DEFAULT false,
+    "customPrompt" TEXT,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -19,4 +17,3 @@ CREATE UNIQUE INDEX "GroupChatSettings_conversationId_key" ON "GroupChatSettings
 
 -- Create index for conversationId lookups
 CREATE INDEX "GroupChatSettings_conversationId_idx" ON "GroupChatSettings"("conversationId");
-

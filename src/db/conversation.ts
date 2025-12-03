@@ -5,10 +5,7 @@ import type {
 } from "@/src/ai/agents/systemPrompt";
 import prisma from "@/src/db/client";
 import { getUserConnections } from "@/src/db/connection";
-import {
-  getGroupChatSettings,
-  type GroupChatSettingsWithDefaults,
-} from "@/src/db/groupChatSettings";
+import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
 import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
 import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
@@ -68,7 +65,7 @@ export interface ConversationContext {
   systemState?: SystemState | null; // Connection status and other system state
   groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
   recentAttachments?: string[]; // URLs of recent image attachments from the conversation (most recent first)
-  groupChatSettings?: GroupChatSettingsWithDefaults | null; // Group chat specific settings (for groups only)
+  groupChatCustomPrompt?: string | null; // Custom prompt for this group chat (injected into system prompt)
 }
 
 /**
@@ -381,9 +378,9 @@ export async function getConversationMessages(
   let userContext: UserResearchContext | null = null;
   let systemState: SystemState | null = null;
   let groupParticipants: GroupParticipantInfo[] | null = null;
-  let groupChatSettings: GroupChatSettingsWithDefaults | null = null;
+  let groupChatCustomPrompt: string | null = null;
 
-  // For group chats, look up participant identities and group settings
+  // For group chats, look up participant identities and custom prompt
   if (conversation.isGroup && conversation.participants.length > 0) {
     try {
       groupParticipants = await Promise.all(
@@ -415,12 +412,12 @@ export async function getConversationMessages(
       );
     }
 
-    // Fetch group chat settings
+    // Fetch group chat custom prompt
     try {
-      groupChatSettings = await getGroupChatSettings(conversationId);
+      groupChatCustomPrompt = await getGroupChatCustomPrompt(conversationId);
     } catch (error) {
       console.warn(
-        `[getConversationMessages] Failed to fetch group chat settings:`,
+        `[getConversationMessages] Failed to fetch group chat custom prompt:`,
         error,
       );
     }
@@ -547,7 +544,7 @@ export async function getConversationMessages(
       systemState,
       groupParticipants,
       recentAttachments: recentAttachments.length > 0 ? recentAttachments : undefined,
-      groupChatSettings,
+      groupChatCustomPrompt,
     },
   };
 }
