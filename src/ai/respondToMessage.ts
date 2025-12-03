@@ -16,10 +16,23 @@ import type {
   IMessageResponse,
   MessageAction,
 } from "@/src/lib/loopmessage-sdk/actions";
+import logger from "@/src/lib/logger";
 import { Output, ToolLoopAgent, type ModelMessage } from "ai";
 
 // Re-export MessageAction type for convenience
 export type { MessageAction } from "@/src/lib/loopmessage-sdk/actions";
+
+/**
+ * Options for respondToMessage
+ */
+export interface RespondToMessageOptions {
+  /**
+   * Optional callback fired once when the first tool call is about to execute.
+   * Use this to send a "working on it" notification to the user.
+   * @param toolNames - Array of tool names being invoked
+   */
+  onToolsInvoked?: (toolNames: string[]) => Promise<void>;
+}
 
 /**
  * Generate a response using the provided agent and conversation context.
@@ -30,12 +43,14 @@ export type { MessageAction } from "@/src/lib/loopmessage-sdk/actions";
  * @param agent - The agent to use for generating the response
  * @param messages - The conversation message history (ModelMessage[] from getConversationMessages)
  * @param context - The conversation context (group vs DM, summary, etc.)
+ * @param options - Optional callbacks and configuration
  * @returns Array of MessageActions (messages or reactions) to execute
  */
 export async function respondToMessage(
   agent: Agent,
   messages: ModelMessage[],
   context: ConversationContext,
+  options?: RespondToMessageOptions,
 ): Promise<MessageAction[]> {
   const before = performance.now();
 
@@ -73,37 +88,43 @@ export async function respondToMessage(
   };
 
   const totalToolCount = Object.keys(allTools).length;
-  console.log(
-    `[${agent.name}] Generating response for ${
-      context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"
-    }${totalToolCount > 0 ? ` (with ${totalToolCount} tools)` : ""}`,
-  );
+  const log = logger.child({
+    component: agent.name,
+    conversationId: context.conversationId,
+    isGroup: context.isGroup,
+    sender: context.sender,
+  });
+
+  log.info("Generating response", {
+    type: context.isGroup ? "GROUP_CHAT" : "DIRECT_MESSAGE",
+    toolCount: totalToolCount,
+  });
+
+  if (context.isGroup && !context.sender) {
+    log.error("Group chat but context.sender is not set - tool auth will fail");
+  }
   if (context.sender) {
-    console.log(`[${agent.name}] Tools authenticated as: ${context.sender}`);
+    log.debug("Tools authenticated", { authenticatedAs: context.sender });
   }
   if (userHasConnections) {
-    console.log(
-      `[${agent.name}] User has active OAuth connections - integration tools enabled`,
-    );
+    log.debug("User has active OAuth connections - integration tools enabled");
   }
 
-  // Debug: Log all tool names and check their schemas
-  console.log(`[${agent.name}] Tool list:`, Object.keys(allTools));
+  log.debug("Tool list", { tools: Object.keys(allTools) });
 
   // Validate each tool schema in detail
-  Object.entries(allTools).forEach(([name, tool], index) => {
+  Object.entries(allTools).forEach(([name, tool]) => {
     const toolObj = tool as { inputSchema?: unknown };
     if (!toolObj.inputSchema) {
-      console.error(
-        `[${agent.name}] ❌ Tool ${index} (${name}) is missing 'inputSchema' field!`,
-      );
-    } else {
-      console.log(`[${agent.name}] ✅ Tool ${index} (${name}) has inputSchema`);
+      log.error("Tool missing inputSchema", { toolName: name });
     }
   });
 
   // Combine context with agent's base instructions
   const systemPrompt = `${contextString}\n\n${agent.baseInstructions}`;
+
+  // Track if we've already notified about tool use (only fire once)
+  let hasNotifiedToolUse = false;
 
   // Create ToolLoopAgent with structured output support
   const loopAgent = new ToolLoopAgent({
@@ -113,34 +134,28 @@ export async function respondToMessage(
     output: Output.object({
       schema: agent.schema,
     }),
+    // Fire callback on first tool call to notify user we're working
+    onStepFinish: async ({ toolCalls }) => {
+      if (toolCalls && toolCalls.length > 0 && !hasNotifiedToolUse && options?.onToolsInvoked) {
+        hasNotifiedToolUse = true;
+        const toolNames = toolCalls.map(tc => tc.toolName);
+        log.info("Tool call detected, firing onToolsInvoked", { tools: toolNames });
+        try {
+          await options.onToolsInvoked(toolNames);
+        } catch (err) {
+          log.error("Error in onToolsInvoked callback", { error: err });
+        }
+      }
+    },
   });
-
-  // Debug: Try to inspect what's being sent to Anthropic
-  if (Object.keys(allTools).length > 0) {
-    try {
-      // Log the first tool's schema to see what's being generated
-      const firstToolName = Object.keys(allTools)[0];
-      const firstTool = allTools[firstToolName as keyof typeof allTools];
-      const toolObj = firstTool as { inputSchema?: unknown };
-      console.log(`[${agent.name}] Inspecting first tool (${firstToolName}):`, {
-        hasInputSchema: !!toolObj.inputSchema,
-        inputSchemaType: typeof toolObj.inputSchema,
-      });
-    } catch (e) {
-      console.error(`[${agent.name}] Failed to inspect tool schema:`, e);
-    }
-  }
 
   // Prepend recent images so Claude can visually "see" them
   // This allows Claude to understand image content when user says "make it brighter" etc.
   let messagesWithImageContext = messages;
-  
-  // Debug: Log attachment collection status
-  console.log(
-    `[${agent.name}] recentAttachments:`,
-    context.recentAttachments?.length ?? 0,
-    context.recentAttachments || "none"
-  );
+
+  log.debug("Recent attachments", {
+    count: context.recentAttachments?.length ?? 0,
+  });
   
   if (context.recentAttachments && context.recentAttachments.length > 0) {
     // Include up to 3 most recent images for context (to limit token usage)
@@ -174,22 +189,14 @@ export async function respondToMessage(
       ...messages,
     ];
 
-    console.log(
-      `[${agent.name}] Added ${imagesToShow.length} image(s) to context for visual awareness`,
-    );
+    log.debug("Added images to context for visual awareness", {
+      imageCount: imagesToShow.length,
+    });
   }
 
-  console.log(
-    `[${agent.name}] Calling ToolLoopAgent.generate() with ${messagesWithImageContext.length} messages...`,
-  );
-  console.log(
-    `[${agent.name}] Agent config:`,
-    JSON.stringify({
-      hasTools: !!agent.tools && Object.keys(agent.tools).length > 0,
-      toolNames: agent.tools ? Object.keys(agent.tools) : [],
-      hasSchema: !!agent.schema,
-    }),
-  );
+  log.debug("Calling ToolLoopAgent.generate()", {
+    messageCount: messagesWithImageContext.length,
+  });
 
   try {
     // Generate response - the agent handles tool calling and structured output automatically
@@ -199,7 +206,7 @@ export async function respondToMessage(
     });
 
     const after = performance.now();
-    console.log(`[${agent.name}] Time taken: ${Math.round(after - before)}ms`);
+    log.info("Response generated", { timeMs: Math.round(after - before) });
 
     // Log tool calls if any were made
     if (result.steps && result.steps.length > 0) {
@@ -207,13 +214,11 @@ export async function respondToMessage(
         // Log tool calls from this step
         if (step.toolCalls && step.toolCalls.length > 0) {
           step.toolCalls.forEach((toolCall) => {
-            console.log(
-              `[${agent.name}] Tool call in step ${stepIdx + 1}:\n${JSON.stringify(
-                { tool: toolCall.toolName, input: toolCall.input },
-                null,
-                2
-              )}`
-            );
+            log.debug("Tool call", {
+              step: stepIdx + 1,
+              tool: toolCall.toolName,
+              input: toolCall.input,
+            });
           });
         }
 
@@ -230,43 +235,32 @@ export async function respondToMessage(
               typeof output === "object" &&
               output.success === false
             ) {
-              console.error(
-                `[${agent.name}] ❌ Tool FAILED in step ${stepIdx + 1}:\n${JSON.stringify(
-                  {
-                    tool: toolResult.toolName,
-                    error: output.message || "Unknown error",
-                    fullOutput: toolResult.output,
-                  },
-                  null,
-                  2
-                )}`
-              );
+              log.error("Tool failed", {
+                step: stepIdx + 1,
+                tool: toolResult.toolName,
+                error: output.message || "Unknown error",
+              });
             } else {
-              console.log(
-                `[${agent.name}] ✅ Tool result in step ${stepIdx + 1}:\n${JSON.stringify(
-                  { tool: toolResult.toolName, output: toolResult.output },
-                  null,
-                  2
-                )}`
-              );
+              log.debug("Tool result", {
+                step: stepIdx + 1,
+                tool: toolResult.toolName,
+              });
             }
           });
         }
       });
-    } else {
-      console.log(`[${agent.name}] No tool calls were made`);
     }
 
     const actions = (result.output as IMessageResponse).actions;
-    console.log(`[${agent.name}] Generated ${actions.length} action(s)`);
+    log.info("Generated actions", { actionCount: actions.length });
 
     return actions;
   } catch (error) {
     const after = performance.now();
-    console.error(
-      `[${agent.name}] Error after ${Math.round(after - before)}ms:`,
+    log.error("Error generating response", {
+      timeMs: Math.round(after - before),
       error,
-    );
+    });
     throw error;
   }
 }

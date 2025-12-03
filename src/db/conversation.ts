@@ -8,6 +8,7 @@ import { getUserConnections } from "@/src/db/connection";
 import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
 import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
+import logger from "@/src/lib/logger";
 import type { ModelMessage } from "ai";
 
 /**
@@ -114,6 +115,14 @@ export async function saveUserMessage(
   groupName?: string,
   participants: string[] = [],
 ) {
+  logger.debug("Saving user message", {
+    component: "saveUserMessage",
+    conversationId,
+    sender,
+    messageId,
+    isGroup,
+  });
+
   const conversation = await getOrCreateConversation(
     conversationId,
     isGroup,
@@ -130,6 +139,12 @@ export async function saveUserMessage(
       messageId,
       attachments,
     },
+  });
+
+  logger.debug("Message created", {
+    component: "saveUserMessage",
+    id: message.id,
+    senderStored: message.sender,
   });
 
   // Update conversation's lastMessageAt
@@ -160,6 +175,63 @@ export async function saveAssistantMessage(
       messageId,
       attachments: [], // Assistant messages can have attachments too
     },
+  });
+
+  return message;
+}
+
+/**
+ * Save a reaction message to the database
+ * Reactions are stored as user messages with a special format that the AI can understand
+ */
+export async function saveReactionMessage(
+  conversationId: string,
+  reaction: string,
+  targetMessageId: string,
+  sender: string,
+  isGroup: boolean = false,
+  groupName?: string,
+  participants: string[] = [],
+) {
+  logger.debug("Saving reaction message", {
+    component: "saveReactionMessage",
+    conversationId,
+    reaction,
+    targetMsgId: targetMessageId,
+    sender,
+  });
+
+  const conversation = await getOrCreateConversation(
+    conversationId,
+    isGroup,
+    groupName,
+    participants,
+  );
+
+  // Format reaction as a special message that the AI can understand
+  const reactionContent = `[REACTION: ${reaction} on msg_id: ${targetMessageId}]`;
+
+  const message = await prisma.message.create({
+    data: {
+      conversationId: conversation.id,
+      role: "user",
+      content: reactionContent as Prisma.InputJsonValue,
+      sender,
+      messageId: null, // Reactions don't have their own message ID
+      attachments: [],
+    },
+  });
+
+  logger.debug("Reaction saved", {
+    component: "saveReactionMessage",
+    id: message.id,
+    content: reactionContent,
+  });
+
+  // Update conversation's lastMessageAt
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: { lastMessageAt: new Date() },
   });
 
   return message;
@@ -286,6 +358,19 @@ export async function getConversationMessages(
     .reverse()
     .find((msg) => msg.role === "user" && msg.sender);
   const sender = lastUserMessage?.sender ?? undefined;
+
+  logger.debug("Retrieved conversation messages", {
+    component: "getConversationMessages",
+    conversationId,
+    isGroup: conversation.isGroup,
+    sender: sender || "NOT_FOUND",
+  });
+  if (conversation.isGroup && !sender) {
+    logger.warn("Group chat but no sender found in messages", {
+      component: "getConversationMessages",
+      conversationId,
+    });
+  }
 
   // Fetch user research context and system state for direct messages
   let userContext: UserResearchContext | null = null;

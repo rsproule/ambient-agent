@@ -5,8 +5,93 @@ import {
   getConversationMessages,
   releaseResponseLock,
 } from "@/src/db/conversation";
+import { createContextLogger } from "@/src/lib/logger";
 import { task, wait } from "@trigger.dev/sdk/v3";
+import { LoopMessageService } from "loopmessage-sdk";
 import { handleMessageResponse } from "./handleMessage";
+
+// Create LoopMessage client for sending quick notifications
+const loopClient = new LoopMessageService({
+  loopAuthKey: process.env.LOOP_AUTH_KEY!,
+  loopSecretKey: process.env.LOOP_SECRET_KEY!,
+  senderName: process.env.LOOP_SENDER_NAME!,
+});
+
+/**
+ * Tool-specific loading messages
+ * Each tool maps to an array of possible messages to randomly choose from
+ */
+const TOOL_LOADING_MESSAGES: Record<string, string[]> = {
+  // Search tools
+  "websearch-perplexity": [
+    "let me look that up...",
+    "searching...",
+    "checking on that...",
+  ],
+
+  // Image generation
+  createImage: ["one sec...", "creating that...", "working on it..."],
+
+  // Calendar tools
+  getCalendarEvents: [
+    "checking your calendar...",
+    "looking at your schedule...",
+  ],
+  createCalendarEvent: [
+    "adding that to your calendar...",
+    "scheduling that...",
+  ],
+
+  // Gmail tools
+  getEmails: ["checking your inbox...", "looking through your emails..."],
+  sendEmail: ["sending that...", "drafting your email..."],
+
+  // GitHub tools
+  getGitHubNotifications: [
+    "checking github...",
+    "looking at your notifications...",
+  ],
+  getGitHubPullRequests: [
+    "checking your PRs...",
+    "looking at pull requests...",
+  ],
+
+  // Research tools
+  requestResearch: ["digging into that...", "researching..."],
+
+  // Context tools
+  getUserContext: ["let me recall...", "thinking..."],
+  updateUserContext: ["noted...", "got it..."],
+
+  // Connection tools
+  generateConnectionLink: ["getting that link...", "one moment..."],
+
+  // Scheduled jobs
+  createScheduledJob: ["scheduling that...", "setting that up..."],
+  listScheduledJobs: [
+    "checking your reminders...",
+    "looking at scheduled items...",
+  ],
+
+  // Default fallback
+  _default: ["one sec...", "let me check...", "working on it..."],
+};
+
+/**
+ * Get a random loading message for the given tools
+ */
+function getLoadingMessage(toolNames: string[]): string {
+  // Try to find a specific message for the first tool
+  for (const toolName of toolNames) {
+    const messages = TOOL_LOADING_MESSAGES[toolName];
+    if (messages && messages.length > 0) {
+      return messages[Math.floor(Math.random() * messages.length)];
+    }
+  }
+  // Fall back to default messages
+  const defaultMessages = TOOL_LOADING_MESSAGES._default;
+  return defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+}
 
 type DebouncedResponsePayload = {
   conversationId: string; // phone number or group_id
@@ -33,10 +118,14 @@ export const debouncedResponse = task({
       taskId,
     );
 
+    const log = createContextLogger({
+      component: "debouncedResponse",
+      conversationId: payload.conversationId,
+      groupId: payload.group,
+    });
+
     if (!lockAcquired) {
-      console.log(
-        `Another response is active for conversation ${payload.conversationId}, interrupting it and waiting`,
-      );
+      log.info("Another response is active, interrupting and waiting");
       // Wait for the interrupt to take effect (give it 2 seconds max)
       await wait.for({ seconds: 2 });
 
@@ -46,9 +135,7 @@ export const debouncedResponse = task({
         taskId,
       );
       if (!retryLock) {
-        console.log(
-          `Could not acquire lock for conversation ${payload.conversationId}, giving up`,
-        );
+        log.info("Could not acquire lock, giving up");
         return {
           skipped: true,
           reason: "lock_acquisition_failed",
@@ -57,9 +144,7 @@ export const debouncedResponse = task({
     }
 
     // Lock acquired, safe to respond
-    console.log(
-      `Responding to conversation ${payload.conversationId} after debounce`,
-    );
+    log.info("Responding after debounce");
 
     // Get conversation history and context (last 100 messages)
     const { messages, context } = await getConversationMessages(
@@ -68,38 +153,60 @@ export const debouncedResponse = task({
     );
 
     if (messages.length === 0) {
-      console.log(
-        `No messages found for conversation ${payload.conversationId}`,
-      );
+      log.info("No messages found");
       return {
         skipped: true,
         reason: "no_messages",
       };
     }
 
-    // Log conversation type and context
-    console.log(
-      `Conversation ${payload.conversationId} is a ${
-        context.isGroup ? "GROUP CHAT" : "DIRECT MESSAGE"
-      }`,
-    );
+    // Log conversation type and context with sender info
+    log.info("Processing conversation", {
+      type: context.isGroup ? "GROUP_CHAT" : "DIRECT_MESSAGE",
+      sender: context.sender || "NOT_FOUND",
+      messageCount: messages.length,
+    });
+    if (context.isGroup && !context.sender) {
+      log.error("Group chat but no sender in context - tool auth will fail");
+    }
     if (context.summary) {
-      console.log(`Conversation has summary: ${context.summary}`);
+      log.debug("Conversation has summary", { summary: context.summary });
     }
 
     // Generate AI response with full conversation context
     try {
+      // Create callback to send quick notification when tools are invoked
+      const onToolsInvoked = async (toolNames: string[]) => {
+        const loadingMessage = getLoadingMessage(toolNames);
+        log.info("Sending tool notification", {
+          message: loadingMessage,
+          tools: toolNames,
+        });
+        try {
+          const baseParams = payload.group
+            ? { group: payload.group }
+            : { recipient: payload.recipient! };
+
+          await loopClient.sendLoopMessage({
+            ...baseParams,
+            text: loadingMessage,
+          });
+          log.info("Tool notification sent");
+        } catch (err) {
+          log.error("Failed to send tool notification", { error: err });
+        }
+      };
+
       const actions = await respondToMessage(
         mrWhiskersAgent,
         messages,
         context,
+        { onToolsInvoked },
       );
 
       // If no actions, we're done (e.g., group chat where no response is needed)
       if (actions.length === 0) {
-        console.log(
-          `No actions to execute for conversation ${payload.conversationId} (likely group chat silence)`,
-        );
+        log.info("No actions to execute (likely group chat silence)");
         await releaseResponseLock(payload.conversationId, taskId);
         return {
           success: true,
