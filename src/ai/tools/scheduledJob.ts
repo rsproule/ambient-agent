@@ -16,6 +16,7 @@ import {
   getScheduledJobsForUser,
   isValidCronExpression,
   setScheduledJobEnabled,
+  updateScheduledJob,
 } from "@/src/db/scheduledJob";
 import { getUserContext } from "@/src/db/userContext";
 import { generateObject, tool, zodSchema } from "ai";
@@ -77,11 +78,12 @@ export function createScheduledJobTools(context: ConversationContext) {
      */
     createScheduledJob: tool({
       description:
-        "Create a scheduled job that runs a prompt on a recurring schedule. " +
+        "Create a NEW scheduled job that runs a prompt on a recurring schedule. " +
         "Use this when the user asks you to do something regularly, like 'check the news every morning' " +
         "or 'remind me about my meetings every day'. " +
-        "The schedule is specified in natural language and will be converted to a cron schedule. " +
-        "IMPORTANT: Confirm with the user what they want checked and how often before creating the job.",
+        "IMPORTANT: Before creating a new job, ALWAYS use listScheduledJobs first to check if a similar job already exists. " +
+        "If a similar job exists, use updateScheduledJob instead to modify it. " +
+        "Only create a new job if no similar job exists.",
       inputSchema: zodSchema(
         z.object({
           name: z
@@ -92,8 +94,8 @@ export function createScheduledJobTools(context: ConversationContext) {
           prompt: z
             .string()
             .describe(
-              "The prompt/instruction to run on schedule. Be specific about what to search for or check. " +
-                "Example: 'Search for the latest news about AI developer tools and summarize the most interesting findings'",
+              "The prompt/instruction to run on schedule. This can be any task - search, generate content, check something, etc. " +
+                "Example: 'Search for the latest news about AI developer tools' or 'Generate a motivational quote'",
             ),
           scheduleDescription: z
             .string()
@@ -129,6 +131,27 @@ export function createScheduledJobTools(context: ConversationContext) {
             };
           }
 
+          // Check for existing jobs with similar names to prevent duplicates
+          const existingJobs = await getScheduledJobsForUser(user.id);
+          const similarJob = existingJobs.find(
+            (j) => j.name.toLowerCase() === name.toLowerCase(),
+          );
+
+          if (similarJob) {
+            return {
+              success: false,
+              message:
+                `A scheduled job named "${similarJob.name}" already exists (ID: ${similarJob.id}). ` +
+                `Use updateScheduledJob to modify it instead of creating a duplicate.`,
+              existingJob: {
+                id: similarJob.id,
+                name: similarJob.name,
+                prompt: similarJob.prompt,
+                schedule: similarJob.cronSchedule,
+              },
+            };
+          }
+
           // Get user's timezone from context
           const userContext = await getUserContext(user.id);
           const timezone = userContext?.timezone || "America/Los_Angeles";
@@ -147,9 +170,11 @@ export function createScheduledJobTools(context: ConversationContext) {
             };
           }
 
-          // Create the scheduled job
+          // Create the scheduled job with conversation context
           const job = await createScheduledJob({
             userId: user.id,
+            conversationId: context.conversationId,
+            isGroup: context.isGroup,
             name,
             prompt,
             cronSchedule: cronExpression,
@@ -192,7 +217,9 @@ export function createScheduledJobTools(context: ConversationContext) {
      */
     listScheduledJobs: tool({
       description:
-        "List all your scheduled jobs. Use this to show what recurring tasks are set up.",
+        "List all scheduled jobs for this user. " +
+        "IMPORTANT: Always call this BEFORE creating a new scheduled job to check if a similar one already exists. " +
+        "This returns job IDs needed for updateScheduledJob, deleteScheduledJob, and toggleScheduledJob.",
       inputSchema: zodSchema(
         z.object({
           enabledOnly: z
@@ -373,6 +400,129 @@ export function createScheduledJobTools(context: ConversationContext) {
           return {
             success: false,
             message: `Failed to toggle scheduled job: ${
+              error instanceof Error ? error.message : "Unknown error"
+            }`,
+          };
+        }
+      },
+    }),
+
+    /**
+     * Tool for updating an existing scheduled job
+     */
+    updateScheduledJob: tool({
+      description:
+        "Update an existing scheduled job. Use this to modify the name, prompt, schedule, or notification mode " +
+        "of an existing job instead of creating a new one. " +
+        "IMPORTANT: Use listScheduledJobs first to get the job ID of the job you want to update.",
+      inputSchema: zodSchema(
+        z.object({
+          jobId: z.string().describe("The ID of the job to update (get this from listScheduledJobs)"),
+          name: z
+            .string()
+            .optional()
+            .describe("New name for the job (optional)"),
+          prompt: z
+            .string()
+            .optional()
+            .describe("New prompt/instruction for the job (optional)"),
+          scheduleDescription: z
+            .string()
+            .optional()
+            .describe(
+              "New schedule in natural language (optional, e.g., 'every morning at 9am')",
+            ),
+          notifyMode: z
+            .enum(["always", "significant"])
+            .optional()
+            .describe("New notification mode (optional)"),
+        }),
+      ),
+      execute: async ({ jobId, name, prompt, scheduleDescription, notifyMode }) => {
+        try {
+          if (!authenticatedPhone) {
+            return {
+              success: false,
+              message: "Could not identify user. Please try again.",
+            };
+          }
+
+          const user = await getUserByPhoneNumber(authenticatedPhone);
+          if (!user) {
+            return {
+              success: false,
+              message:
+                "User not found. You may need to set up your account first.",
+            };
+          }
+
+          // Verify job belongs to user
+          const jobs = await getScheduledJobsForUser(user.id);
+          const existingJob = jobs.find((j) => j.id === jobId);
+
+          if (!existingJob) {
+            return {
+              success: false,
+              message: "Job not found or doesn't belong to you.",
+            };
+          }
+
+          // Get user's timezone from context
+          const userContext = await getUserContext(user.id);
+          const timezone = userContext?.timezone || "America/Los_Angeles";
+
+          // Build updates object
+          const updates: {
+            name?: string;
+            prompt?: string;
+            cronSchedule?: string;
+            timezone?: string;
+            notifyMode?: "always" | "significant";
+          } = {};
+
+          if (name) updates.name = name;
+          if (prompt) updates.prompt = prompt;
+          if (notifyMode) updates.notifyMode = notifyMode;
+
+          // Parse new schedule if provided
+          let interpretation: string | undefined;
+          if (scheduleDescription) {
+            const parsed = await parseScheduleToCron(scheduleDescription, timezone);
+            if (!isValidCronExpression(parsed.cronExpression)) {
+              return {
+                success: false,
+                message: `Failed to parse schedule "${scheduleDescription}". Please try describing it differently.`,
+              };
+            }
+            updates.cronSchedule = parsed.cronExpression;
+            updates.timezone = timezone;
+            interpretation = parsed.interpretation;
+          }
+
+          // Update the job
+          const job = await updateScheduledJob(jobId, updates);
+          const nextRunDesc = getNextRunDescription(job);
+
+          const changedFields: string[] = [];
+          if (name) changedFields.push("name");
+          if (prompt) changedFields.push("prompt");
+          if (scheduleDescription) changedFields.push("schedule");
+          if (notifyMode) changedFields.push("notification mode");
+
+          return {
+            success: true,
+            message:
+              `Updated scheduled job "${job.name}"! ` +
+              `Changed: ${changedFields.join(", ")}. ` +
+              (interpretation ? `New schedule: ${interpretation.toLowerCase()}. ` : "") +
+              `Next run: ${nextRunDesc}.`,
+            jobId: job.id,
+            updatedFields: changedFields,
+          };
+        } catch (error) {
+          return {
+            success: false,
+            message: `Failed to update scheduled job: ${
               error instanceof Error ? error.message : "Unknown error"
             }`,
           };
