@@ -7,6 +7,7 @@ import {
   createGitHubTools,
   createGmailTools,
   createGroupChatSettingsTools,
+  createRequestFeatureTool,
   createRequestResearchTool,
   createScheduledJobTools,
   createUpdateUserContextTool,
@@ -69,6 +70,7 @@ export async function respondToMessage(
     getUserContext: createGetUserContextTool(context),
     updateUserContext: createUpdateUserContextTool(context),
     requestResearch: createRequestResearchTool(context),
+    requestFeature: createRequestFeatureTool(context),
     completeOnboarding: createCompleteOnboardingTool(context),
     ...createScheduledJobTools(context),
   };

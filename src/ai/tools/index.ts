@@ -9,6 +9,7 @@
  * - Access integrated services (Gmail, GitHub, Calendar) via OAuth
  * - Create and manage scheduled jobs
  * - Configure group chat settings
+ * - Record feature requests from users
  *
  * Security: User-identity-sensitive tools are context-bound factories.
  * The phone number is taken from authenticated context, not user input,
@@ -20,6 +21,7 @@ export { createCompleteOnboardingTool } from "./completeOnboarding";
 export { createGenerateConnectionLinkTool } from "./generateConnectionLink";
 export { createGetUserContextTool } from "./getUserContext";
 export { createGroupChatSettingsTools } from "./groupChatSettings";
+export { createRequestFeatureTool } from "./requestFeature";
 export { createRequestResearchTool } from "./requestResearch";
 export { createUpdateUserContextTool } from "./updateUserContext";
 export { createScheduledJobTools } from "./scheduledJob";

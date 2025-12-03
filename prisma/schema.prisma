@@ -328,3 +328,20 @@ model GroupChatSettings {
 
   @@index([conversationId])
 }
+
+// ============================================
+// Feature Requests
+// ============================================
+
+model FeatureRequest {
+  id          String  @id @default(cuid())
+  description String  @db.Text // What the user requested
+  phoneNumber String? // Who requested it (optional - may be from group)
+  userName    String? // Name if known
+  context     String? @db.Text // Optional context about how/why they requested it
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phoneNumber])
+}

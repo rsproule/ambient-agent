@@ -23,20 +23,29 @@ export function Navbar() {
     <nav className="fixed top-0 left-0 right-0 bg-background/80 backdrop-blur-md border-b border-border z-50">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-            <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-border">
-              <Image
-                src="/whiskerspfp.jpg"
-                alt="Mr. Whiskers"
-                fill
-                className="object-cover"
-              />
-            </div>
-            <span className="font-bold text-lg text-foreground">
-              Mr. Whiskers
-            </span>
-          </Link>
+          {/* Left side - Logo + Features link */}
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
+              <div className="relative w-10 h-10 rounded-full overflow-hidden ring-2 ring-border">
+                <Image
+                  src="/whiskerspfp.jpg"
+                  alt="Mr. Whiskers"
+                  fill
+                  className="object-cover"
+                />
+              </div>
+              <span className="font-bold text-lg text-foreground">
+                Mr. Whiskers
+              </span>
+            </Link>
+
+            <Link
+              href="/features"
+              className="hidden sm:block text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              What can Whiskers do?
+            </Link>
+          </div>
 
           {/* Right side - Auth state */}
           {session?.user ? (
