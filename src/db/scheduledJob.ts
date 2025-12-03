@@ -18,6 +18,8 @@ import { CronExpressionParser } from "cron-parser";
 export interface ScheduledJob {
   id: string;
   userId: string;
+  conversationId: string; // Phone number (DM) or group_id (group chat)
+  isGroup: boolean; // Whether this was created in a group chat
   name: string;
   prompt: string;
   cronSchedule: string;
@@ -33,6 +35,8 @@ export interface ScheduledJob {
 
 export interface CreateScheduledJobInput {
   userId: string;
+  conversationId: string; // Phone number (DM) or group_id (group chat)
+  isGroup?: boolean; // Whether this is a group chat (defaults to false)
   name: string;
   prompt: string;
   cronSchedule: string;
@@ -65,6 +69,8 @@ export async function createScheduledJob(
   const job = await prisma.scheduledJob.create({
     data: {
       userId: input.userId,
+      conversationId: input.conversationId,
+      isGroup: input.isGroup ?? false,
       name: input.name,
       prompt: input.prompt,
       cronSchedule: input.cronSchedule,
@@ -344,6 +350,8 @@ export function getNextRunDescription(job: ScheduledJob): string {
 function formatScheduledJob(job: {
   id: string;
   userId: string;
+  conversationId: string;
+  isGroup: boolean;
   name: string;
   prompt: string;
   cronSchedule: string;
@@ -359,6 +367,8 @@ function formatScheduledJob(job: {
   return {
     id: job.id,
     userId: job.userId,
+    conversationId: job.conversationId,
+    isGroup: job.isGroup,
     name: job.name,
     prompt: job.prompt,
     cronSchedule: job.cronSchedule,

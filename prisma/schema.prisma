@@ -292,6 +292,10 @@ model ScheduledJob {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // Conversation context - where the job was created and should run
+  conversationId String // Phone number (DM) or group_id (group chat)
+  isGroup        Boolean @default(false) // Whether this was created in a group chat
+
   name         String // Human-readable name, e.g. "AI news check"
   prompt       String  @db.Text // The prompt to run, e.g. "Search for news about AI dev tools"
   cronSchedule String // Cron expression, e.g. "0 8 * * *" (parsed from natural language by LLM)
@@ -309,6 +313,7 @@ model ScheduledJob {
 
   @@index([userId])
   @@index([enabled, nextRunAt])
+  @@index([conversationId])
 }
 
 // ============================================
@@ -327,4 +332,21 @@ model GroupChatSettings {
   updatedAt DateTime @updatedAt
 
   @@index([conversationId])
+}
+
+// ============================================
+// Feature Requests
+// ============================================
+
+model FeatureRequest {
+  id          String  @id @default(cuid())
+  description String  @db.Text // What the user requested
+  phoneNumber String? // Who requested it (optional - may be from group)
+  userName    String? // Name if known
+  context     String? @db.Text // Optional context about how/why they requested it
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([phoneNumber])
 }

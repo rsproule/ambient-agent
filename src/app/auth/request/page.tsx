@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Loader } from "@/src/components/loader";
+import { MessageCircle } from "lucide-react";
 
 export default function RequestMagicLinkPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
@@ -47,33 +48,35 @@ export default function RequestMagicLinkPage() {
   };
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-zinc-900 dark:to-zinc-950 pt-16">
-      <main className="flex flex-col items-center gap-8 p-8 text-center max-w-md w-full">
-        <div className="relative w-32 h-32 rounded-full overflow-hidden shadow-2xl ring-4 ring-white dark:ring-zinc-800">
-          <Image
-            src="/whiskerspfp.jpg"
-            alt="Whiskers"
-            fill
-            className="object-cover"
-            priority
-          />
+    <div className="min-h-screen bg-background pt-16">
+      <div className="container mx-auto px-6 py-16 max-w-md">
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-10">
+          <div className="relative w-14 h-14 rounded-xl overflow-hidden shrink-0">
+            <Image
+              src="/whiskerspfp.jpg"
+              alt="Mr. Whiskers"
+              fill
+              className="object-cover"
+              priority
+            />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-foreground">
+              Request Connection Link
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Get a link to manage your accounts
+            </p>
+          </div>
         </div>
 
-        <div className="space-y-4">
-          <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">
-            Request Connection Link
-          </h1>
-          <p className="text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed">
-            Enter your phone number and Mr. Whiskers will send you a secure
-            link to manage your account connections.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="w-full space-y-4">
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label
               htmlFor="phoneNumber"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 text-left"
+              className="block text-sm font-medium text-foreground"
             >
               Phone Number
             </label>
@@ -84,10 +87,10 @@ export default function RequestMagicLinkPage() {
               onChange={(e) => setPhoneNumber(e.target.value)}
               placeholder="+1234567890"
               required
-              className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
               disabled={isLoading}
             />
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 text-left">
+            <p className="text-xs text-muted-foreground">
               Include country code (e.g., +1 for US)
             </p>
           </div>
@@ -95,7 +98,7 @@ export default function RequestMagicLinkPage() {
           <button
             type="submit"
             disabled={isLoading || !phoneNumber}
-            className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-semibold rounded-lg shadow-md transition-colors disabled:cursor-not-allowed"
+            className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed"
           >
             {isLoading ? (
               <>
@@ -108,40 +111,33 @@ export default function RequestMagicLinkPage() {
           </button>
         </form>
 
+        {/* Message */}
         {message && (
           <div
-            className={`w-full p-4 rounded-lg ${
+            className={`mt-4 p-4 rounded-lg text-sm ${
               message.type === "success"
-                ? "bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
-                : "bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
+                ? "bg-green-500/10 text-green-700 dark:text-green-300 border border-green-500/20"
+                : "bg-red-500/10 text-red-700 dark:text-red-300 border border-red-500/20"
             }`}
           >
-            <p className="text-sm font-medium">{message.text}</p>
+            {message.text}
           </div>
         )}
 
-        <div className="pt-4 space-y-2">
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+        {/* Alternative */}
+        <div className="mt-8 pt-6 border-t border-border">
+          <p className="text-sm text-muted-foreground mb-3">
             Or text Mr. Whiskers directly:
           </p>
           <a
             href="sms:+17243216167&body=I need my connection link"
-            className="inline-flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 font-medium transition-colors"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-5 w-5"
-              viewBox="0 0 20 20"
-              fill="currentColor"
-            >
-              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-            </svg>
-            Text +1 (724) 321-6167
+            <MessageCircle className="w-4 h-4" />
+            +1 (724) 321-6167
           </a>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
-

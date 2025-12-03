@@ -1,73 +1,207 @@
 /**
  * Run Scheduled Job Task
  *
- * Executes a single scheduled job (fuzzy job) and optionally notifies the user.
+ * Executes a single scheduled job by running its prompt through the agent,
+ * just like a regular user message. The agent decides what tools to use.
  */
 
+import { mrWhiskersAgent } from "@/src/ai/agents/mrWhiskers";
+import { respondToMessage } from "@/src/ai/respondToMessage";
+import type { ConversationContext } from "@/src/db/conversation";
 import { getScheduledJob, markJobFailed, updateJobAfterRun } from "@/src/db/scheduledJob";
 import { getPhoneNumberForUser } from "@/src/db/user";
-import { saveSystemMessage } from "@/src/db/conversation";
-import { perplexity } from "@ai-sdk/perplexity";
+import { getUserContextByPhone } from "@/src/db/userContext";
+import { getUserConnections } from "@/src/db/connection";
+import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
+import prisma from "@/src/db/client";
 import { task } from "@trigger.dev/sdk/v3";
-import { generateObject, generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
-import { z } from "zod";
-import { debouncedResponse } from "./debouncedResponse";
+import type { ModelMessage } from "ai";
+import { handleMessageResponse } from "./handleMessage";
 
 type RunScheduledJobPayload = {
   jobId: string;
 };
 
-interface SearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-}
-
 /**
- * Simple web search using Perplexity
+ * Build a ConversationContext for a scheduled job
+ * This mimics what getConversationMessages does but for scheduled jobs
  */
-async function simpleWebSearch(
-  query: string,
-  maxResults: number = 5,
-): Promise<{ success: boolean; results?: SearchResult[] }> {
-  try {
-    const { object } = await generateObject({
-      model: perplexity("sonar"),
-      schema: z.object({
-        results: z.array(
-          z.object({
-            title: z.string(),
-            url: z.string(),
-            snippet: z.string(),
-          }),
-        ),
-      }),
-      system:
-        "You are a search assistant. Return strictly the JSON schema provided. For each result include title, url, and a short snippet.",
-      prompt: `Search the web for: ${query}. Return up to ${maxResults} high-quality, diverse results with proper URLs.`,
-    });
+async function buildScheduledJobContext(
+  job: {
+    userId: string;
+    conversationId: string;
+    isGroup: boolean;
+    timezone: string | null;
+  },
+  phoneNumber: string,
+): Promise<ConversationContext> {
+  const context: ConversationContext = {
+    conversationId: job.conversationId,
+    isGroup: job.isGroup,
+    participants: [],
+    sender: phoneNumber, // The job runs on behalf of the user who created it
+  };
 
-    return {
-      success: true,
-      results: object.results.slice(0, maxResults),
-    };
-  } catch (error) {
-    console.error("[simpleWebSearch] Error:", error);
-    return { success: false };
+  // Get the conversation if it exists (for group info)
+  const conversation = await prisma.conversation.findUnique({
+    where: { conversationId: job.conversationId },
+  });
+
+  if (conversation) {
+    context.participants = conversation.participants;
+    context.groupName = conversation.groupName ?? undefined;
+    context.summary = conversation.summary ?? undefined;
   }
+
+  // For group chats, get participant info and custom prompt
+  if (job.isGroup && conversation?.participants?.length) {
+    try {
+      context.groupParticipants = await Promise.all(
+        conversation.participants.map(async (participantPhone) => {
+          const participantContext = await getUserContextByPhone(participantPhone);
+          const user = await prisma.user.findUnique({
+            where: { phoneNumber: participantPhone },
+            select: { name: true },
+          });
+
+          let brief: string | undefined;
+          if (participantContext?.summary) {
+            const firstSentence = participantContext.summary.split(/[.!?]/)[0];
+            brief = firstSentence ? firstSentence.trim() : undefined;
+          }
+
+          return {
+            phoneNumber: participantPhone,
+            name: user?.name ?? undefined,
+            brief,
+          };
+        }),
+      );
+
+      context.groupChatCustomPrompt = await getGroupChatCustomPrompt(job.conversationId);
+    } catch (error) {
+      console.warn(`[RunScheduledJob] Failed to fetch group info:`, error);
+    }
+  }
+
+  // For DMs, get user context and system state
+  if (!job.isGroup) {
+    try {
+      // Get user with outboundOptIn field from Prisma directly
+      const user = await prisma.user.findUnique({
+        where: { id: job.userId },
+        select: { id: true, outboundOptIn: true },
+      });
+
+      if (user) {
+        // Get user context
+        const userContext = await getUserContextByPhone(phoneNumber);
+        if (userContext) {
+          context.userContext = {
+            summary: userContext.summary,
+            interests: userContext.interests,
+            professional: userContext.professional,
+            facts: userContext.facts,
+            recentDocuments: userContext.documents?.slice(0, 5).map((d) => ({
+              title: d.title,
+              source: d.source,
+            })),
+          };
+        }
+
+        // Get connection status
+        const connections = await getUserConnections(job.userId);
+        const gmailConnected = connections.some(
+          (c) => c.provider === "google_gmail" && c.status === "connected",
+        );
+        const githubConnected = connections.some(
+          (c) => c.provider === "github" && c.status === "connected",
+        );
+        const calendarConnected = connections.some(
+          (c) => c.provider === "google_calendar" && c.status === "connected",
+        );
+
+        const timezone = job.timezone || userContext?.timezone || "America/Los_Angeles";
+        const now = new Date();
+
+        context.systemState = {
+          currentTime: {
+            iso: now.toISOString(),
+            formatted: now.toLocaleString("en-US", {
+              timeZone: timezone,
+              weekday: "long",
+              year: "numeric",
+              month: "long",
+              day: "numeric",
+              hour: "numeric",
+              minute: "2-digit",
+              hour12: true,
+            }),
+            timezone,
+            dayOfWeek: now.toLocaleString("en-US", {
+              timeZone: timezone,
+              weekday: "long",
+            }),
+          },
+          connections: {
+            gmail: gmailConnected,
+            github: githubConnected,
+            calendar: calendarConnected,
+          },
+          hasAnyConnection: gmailConnected || githubConnected || calendarConnected,
+          researchStatus: userContext ? "completed" : "none",
+          outboundOptIn: user.outboundOptIn,
+          timezoneSource: timezone ? "known" : "default",
+          isOnboarding: false, // Scheduled jobs only run for established users
+        };
+      }
+    } catch (error) {
+      console.warn(`[RunScheduledJob] Failed to fetch user context:`, error);
+    }
+  }
+
+  // Ensure we always have at least basic system state
+  if (!context.systemState) {
+    const timezone = job.timezone || "America/Los_Angeles";
+    const now = new Date();
+    context.systemState = {
+      currentTime: {
+        iso: now.toISOString(),
+        formatted: now.toLocaleString("en-US", {
+          timeZone: timezone,
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }),
+        timezone,
+        dayOfWeek: now.toLocaleString("en-US", {
+          timeZone: timezone,
+          weekday: "long",
+        }),
+      },
+      connections: { gmail: false, github: false, calendar: false },
+      hasAnyConnection: false,
+    };
+  }
+
+  return context;
 }
 
 /**
- * Execute a scheduled job and notify user if appropriate
+ * Execute a scheduled job by running its prompt through the agent
  */
 export const runScheduledJob = task({
   id: "run-scheduled-job",
   machine: {
-    preset: "small-1x",
+    preset: "medium-1x", // Match debouncedResponse for AI SDK
   },
-  run: async (payload: RunScheduledJobPayload) => {
+  run: async (payload: RunScheduledJobPayload, { ctx }) => {
     const { jobId } = payload;
+    const taskId = ctx.run.id;
 
     console.log(`[RunScheduledJob] Starting job ${jobId}`);
 
@@ -92,108 +226,61 @@ export const runScheduledJob = task({
     }
 
     try {
-      // Execute the job's prompt using web search
-      console.log(`[RunScheduledJob] Executing web search for: ${job.prompt}`);
-      const searchResults = await simpleWebSearch(job.prompt, 5);
+      // Build conversation context for the job
+      const context = await buildScheduledJobContext(job, phoneNumber);
 
-      if (!searchResults.success || !searchResults.results) {
-        console.error(`[RunScheduledJob] Web search failed for job ${jobId}`);
-        await markJobFailed(jobId, false);
-        return { success: false, reason: "search_failed" };
-      }
+      console.log(`[RunScheduledJob] Executing prompt for job "${job.name}": ${job.prompt}`);
 
-      // Format search results
-      const resultsText = searchResults.results
-        .map(
-          (r: SearchResult, i: number) =>
-            `[${i + 1}] ${r.title}\n${r.snippet}${r.url ? `\nSource: ${r.url}` : ""}`,
-        )
-        .join("\n\n");
+      // Create a synthetic message with the job's prompt
+      // This looks like a system instruction for the agent
+      const syntheticMessage: ModelMessage = {
+        role: "user",
+        content:
+          `[SCHEDULED JOB: "${job.name}"]\n` +
+          `This is an automated scheduled task. Execute the following instruction and respond naturally:\n\n` +
+          `${job.prompt}\n\n` +
+          `Note: This is a scheduled job, not a direct user message. ` +
+          `Respond as if you're proactively sharing something useful with the user.`,
+      };
 
-      // Use LLM to analyze results and determine significance
-      const analysis = await generateText({
-        model: anthropic("claude-sonnet-4-20250514"),
-        prompt: `You are analyzing search results for a scheduled job.
+      // Run the prompt through the agent (just like a regular message)
+      const actions = await respondToMessage(
+        mrWhiskersAgent,
+        [syntheticMessage],
+        context,
+      );
 
-Job name: "${job.name}"
-Job prompt: "${job.prompt}"
-
-Search results:
-${resultsText}
-
-Previous result (for comparison):
-${job.lastResult ? JSON.stringify(job.lastResult) : "None - this is the first run"}
-
-Analyze these results and determine:
-1. Is there anything new/significant worth sharing with the user?
-2. Create a brief, engaging summary of the most interesting findings.
-
-If this is news/updates content, focus on what's NEW since the last check.
-If results are mostly the same as before or not particularly interesting, say so.
-
-Response format:
-SIGNIFICANT: [yes/no]
-SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
-      });
-
-      const isSignificant = analysis.text.toLowerCase().includes("significant: yes");
-      const summaryMatch = analysis.text.match(/SUMMARY:\s*([\s\S]+)/i);
-      const summary = summaryMatch
-        ? summaryMatch[1].trim()
-        : "Search completed but no notable findings.";
-
-      // Update job with results
+      // Update job with results (store summary of what was generated)
       await updateJobAfterRun(jobId, {
-        summary,
-        isSignificant,
         executedAt: new Date().toISOString(),
-        searchResults: searchResults.results.slice(0, 3).map((r: SearchResult) => ({
-          title: r.title,
-          snippet: r.snippet,
-          url: r.url,
-        })),
+        actionsGenerated: actions.length,
+        prompt: job.prompt,
       });
 
-      // Determine if we should notify the user
-      const shouldNotify =
-        job.notifyMode === "always" ||
-        (job.notifyMode === "significant" && isSignificant);
-
-      if (!shouldNotify) {
-        console.log(
-          `[RunScheduledJob] Job ${jobId} completed, but not notifying (notifyMode: ${job.notifyMode}, isSignificant: ${isSignificant})`,
-        );
+      // If no actions, the agent decided not to respond
+      if (actions.length === 0) {
+        console.log(`[RunScheduledJob] Job ${jobId} completed, no actions generated`);
         return {
           success: true,
           notified: false,
-          reason: "not_significant",
-          summary,
+          reason: "no_actions_generated",
         };
       }
 
-      // Build notification message
-      const systemMessage =
-        `[SYSTEM: Scheduled job "${job.name}" completed - share findings naturally]\n` +
-        `[scheduled:${jobId}:${Date.now()}]\n` +
-        `\n${summary}\n\n` +
-        `Sources:\n${searchResults.results
-          .slice(0, 3)
-          .map((r: SearchResult) => `- ${r.title}${r.url ? ` (${r.url})` : ""}`)
-          .join("\n")}`;
+      // Determine notification target based on job context
+      const isGroup = job.isGroup;
+      const recipient = isGroup ? undefined : phoneNumber;
+      const group = isGroup ? job.conversationId : undefined;
 
-      // Save system message
-      await saveSystemMessage(
-        phoneNumber,
-        systemMessage,
-        `scheduled-job:${job.name}`,
-        false,
-      );
-
-      // Trigger Whiskers to respond
-      await debouncedResponse.trigger({
-        conversationId: phoneNumber,
-        recipient: phoneNumber,
-        timestampWhenTriggered: new Date().toISOString(),
+      // Execute the actions via handleMessageResponse
+      await handleMessageResponse.triggerAndWait({
+        conversationId: job.conversationId,
+        recipient,
+        group,
+        actions,
+        taskId,
+        sender: phoneNumber,
+        isGroup,
       });
 
       console.log(`[RunScheduledJob] Job ${jobId} completed and user notified`);
@@ -201,8 +288,7 @@ SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
       return {
         success: true,
         notified: true,
-        summary,
-        isSignificant,
+        actionsExecuted: actions.length,
       };
     } catch (error) {
       console.error(`[RunScheduledJob] Error executing job ${jobId}:`, error);
@@ -215,4 +301,3 @@ SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
     }
   },
 });
-
