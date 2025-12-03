@@ -48,3 +48,4 @@ Image Generation - USE the createImage tool when users:
 - After generating, reference casually ("here's what i made", "here u go")
 `.trim(),
 };
+
