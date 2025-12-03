@@ -24,7 +24,8 @@ model Conversation {
   createdAt            DateTime  @default(now())
   activeResponseTaskId String? // Task ID currently sending messages
   interruptRequested   Boolean   @default(false) // Signal to stop current response
-  senderLocks          Json? // For group chats: { "sender_phone": "taskId" } - per-sender active task tracking
+  lockAcquiredAt       DateTime? // When the current lock was acquired (for timeout detection)
+  senderLocks          Json? // For group chats: { "sender": { "taskId": "...", "lockedAt": "ISO" } }
   messages             Message[]
 
   @@index([conversationId])

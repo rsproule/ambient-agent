@@ -761,24 +761,21 @@ export async function hasNewMessagesSince(
   return lastMessageAt > timestamp;
 }
 
-/**
- * Sender locks type for group chats
- * Maps sender phone number to their active task ID
- */
-type SenderLocks = Record<string, string>;
+// Lock timeout in milliseconds (35 seconds)
+const LOCK_TIMEOUT_MS = 35_000;
+
+type SenderLockInfo = { taskId: string; lockedAt: string };
+type SenderLocks = Record<string, SenderLockInfo>;
+
+function isLockExpired(lockedAt: Date | string | null | undefined): boolean {
+  if (!lockedAt) return true;
+  const lockTime = typeof lockedAt === "string" ? new Date(lockedAt) : lockedAt;
+  return Date.now() - lockTime.getTime() > LOCK_TIMEOUT_MS;
+}
 
 /**
- * Acquire lock for sending messages in a conversation
- *
- * For DMs: Uses conversation-level lock (activeResponseTaskId)
- * For Group Chats with sender: Uses per-sender lock (senderLocks JSON)
- *   - This allows multiple senders to have parallel response tasks
- *   - Each sender's messages debounce independently
- *
- * @param conversationId - The conversation identifier
- * @param taskId - The unique task ID for this response
- * @param sender - Optional sender phone number (required for group chat per-sender locking)
- * @param isGroup - Whether this is a group chat
+ * Acquire lock for sending messages in a conversation.
+ * Locks auto-expire after 35 seconds to prevent deadlocks.
  */
 export async function acquireResponseLock(
   conversationId: string,
@@ -787,43 +784,45 @@ export async function acquireResponseLock(
   isGroup?: boolean,
 ): Promise<boolean> {
   const conversation = await getOrCreateConversation(conversationId);
+  const now = new Date();
 
-  // For group chats with a sender, use per-sender locking
   if (isGroup && sender) {
     const senderLocks = (conversation.senderLocks as SenderLocks) || {};
+    const existingLock = senderLocks[sender];
 
-    // Check if this sender already has an active task
-    if (senderLocks[sender]) {
-      // Don't interrupt other senders - just this sender's previous task
-      // For groups, we allow parallel responses from different senders
+    // Allow acquisition if no lock or lock is expired
+    if (existingLock && !isLockExpired(existingLock.lockedAt)) {
       return false;
     }
 
-    // Acquire per-sender lock
-    const updatedLocks = { ...senderLocks, [sender]: taskId };
+    const updatedLocks: SenderLocks = {
+      ...senderLocks,
+      [sender]: { taskId, lockedAt: now.toISOString() },
+    };
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: { senderLocks: updatedLocks },
     });
-
     return true;
   }
 
-  // For DMs: use conversation-level lock (original behavior)
-  // If there's already an active response, request interrupt
+  // For DMs: check if existing lock is expired
   if (conversation.activeResponseTaskId) {
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { interruptRequested: true },
-    });
-    return false;
+    if (!isLockExpired(conversation.lockAcquiredAt)) {
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { interruptRequested: true },
+      });
+      return false;
+    }
+    // Lock expired, we can take it over
   }
 
-  // Acquire the lock
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
       activeResponseTaskId: taskId,
+      lockAcquiredAt: now,
       interruptRequested: false,
     },
   });
@@ -833,11 +832,6 @@ export async function acquireResponseLock(
 
 /**
  * Release the response lock for a conversation
- *
- * @param conversationId - The conversation identifier
- * @param taskId - The unique task ID to release
- * @param sender - Optional sender phone number (for group chat per-sender locking)
- * @param isGroup - Whether this is a group chat
  */
 export async function releaseResponseLock(
   conversationId: string,
@@ -847,12 +841,11 @@ export async function releaseResponseLock(
 ): Promise<void> {
   const conversation = await getOrCreateConversation(conversationId);
 
-  // For group chats with a sender, release per-sender lock
   if (isGroup && sender) {
     const senderLocks = (conversation.senderLocks as SenderLocks) || {};
+    const existingLock = senderLocks[sender];
 
-    // Only release if this task owns the sender's lock
-    if (senderLocks[sender] === taskId) {
+    if (existingLock?.taskId === taskId) {
       const updatedLocks = { ...senderLocks };
       delete updatedLocks[sender];
       await prisma.conversation.update({
@@ -863,13 +856,12 @@ export async function releaseResponseLock(
     return;
   }
 
-  // For DMs: use conversation-level lock (original behavior)
-  // Only release if this task owns the lock
   if (conversation.activeResponseTaskId === taskId) {
     await prisma.conversation.update({
       where: { id: conversation.id },
       data: {
         activeResponseTaskId: null,
+        lockAcquiredAt: null,
         interruptRequested: false,
       },
     });
@@ -878,14 +870,6 @@ export async function releaseResponseLock(
 
 /**
  * Check if the current response should be interrupted
- *
- * For group chats with per-sender locking, we don't support interrupts
- * (each sender's tasks are independent and don't interrupt each other)
- *
- * @param conversationId - The conversation identifier
- * @param taskId - The unique task ID to check
- * @param sender - Optional sender phone number (for group chat per-sender locking)
- * @param isGroup - Whether this is a group chat
  */
 export async function shouldInterrupt(
   conversationId: string,
@@ -893,13 +877,11 @@ export async function shouldInterrupt(
   sender?: string,
   isGroup?: boolean,
 ): Promise<boolean> {
-  // For group chats with per-sender locking, no interrupts
-  // Each sender's response tasks are independent
+  // Group chats with per-sender locking don't use interrupts
   if (isGroup && sender) {
     return false;
   }
 
-  // For DMs: check conversation-level interrupt flag
   const conversation = await prisma.conversation.findUnique({
     where: { conversationId },
     select: { activeResponseTaskId: true, interruptRequested: true },
@@ -909,7 +891,6 @@ export async function shouldInterrupt(
     return false;
   }
 
-  // Interrupt if requested and this task is the active one
   return (
     conversation.activeResponseTaskId === taskId &&
     conversation.interruptRequested
