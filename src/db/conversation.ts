@@ -761,21 +761,12 @@ export async function hasNewMessagesSince(
   return lastMessageAt > timestamp;
 }
 
-// Lock timeout in milliseconds (35 seconds)
-const LOCK_TIMEOUT_MS = 35_000;
-
 type SenderLockInfo = { taskId: string; lockedAt: string };
 type SenderLocks = Record<string, SenderLockInfo>;
 
-function isLockExpired(lockedAt: Date | string | null | undefined): boolean {
-  if (!lockedAt) return true;
-  const lockTime = typeof lockedAt === "string" ? new Date(lockedAt) : lockedAt;
-  return Date.now() - lockTime.getTime() > LOCK_TIMEOUT_MS;
-}
-
 /**
  * Acquire lock for sending messages in a conversation.
- * Locks auto-expire after 35 seconds to prevent deadlocks.
+ * Always overwrites existing lock - previous task will abort via isCurrentGeneration().
  */
 export async function acquireResponseLock(
   conversationId: string,
@@ -788,13 +779,6 @@ export async function acquireResponseLock(
 
   if (isGroup && sender) {
     const senderLocks = (conversation.senderLocks as SenderLocks) || {};
-    const existingLock = senderLocks[sender];
-
-    // Allow acquisition if no lock or lock is expired
-    if (existingLock && !isLockExpired(existingLock.lockedAt)) {
-      return false;
-    }
-
     const updatedLocks: SenderLocks = {
       ...senderLocks,
       [sender]: { taskId, lockedAt: now.toISOString() },
@@ -806,24 +790,11 @@ export async function acquireResponseLock(
     return true;
   }
 
-  // For DMs: check if existing lock is expired
-  if (conversation.activeResponseTaskId) {
-    if (!isLockExpired(conversation.lockAcquiredAt)) {
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { interruptRequested: true },
-      });
-      return false;
-    }
-    // Lock expired, we can take it over
-  }
-
   await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
       activeResponseTaskId: taskId,
       lockAcquiredAt: now,
-      interruptRequested: false,
     },
   });
 
@@ -869,7 +840,33 @@ export async function releaseResponseLock(
 }
 
 /**
- * Check if the current response should be interrupted
+ * Check if this task still owns the generation lock (not superseded by a newer task)
+ */
+export async function isCurrentGeneration(
+  conversationId: string,
+  taskId: string,
+  sender?: string,
+  isGroup?: boolean,
+): Promise<boolean> {
+  const conversation = await prisma.conversation.findUnique({
+    where: { conversationId },
+    select: { activeResponseTaskId: true, senderLocks: true },
+  });
+
+  if (!conversation) {
+    return false;
+  }
+
+  if (isGroup && sender) {
+    const senderLocks = (conversation.senderLocks as SenderLocks) || {};
+    return senderLocks[sender]?.taskId === taskId;
+  }
+
+  return conversation.activeResponseTaskId === taskId;
+}
+
+/**
+ * @deprecated Use isCurrentGeneration() polling instead
  */
 export async function shouldInterrupt(
   conversationId: string,
@@ -877,22 +874,9 @@ export async function shouldInterrupt(
   sender?: string,
   isGroup?: boolean,
 ): Promise<boolean> {
-  // Group chats with per-sender locking don't use interrupts
   if (isGroup && sender) {
     return false;
   }
-
-  const conversation = await prisma.conversation.findUnique({
-    where: { conversationId },
-    select: { activeResponseTaskId: true, interruptRequested: true },
-  });
-
-  if (!conversation) {
-    return false;
-  }
-
-  return (
-    conversation.activeResponseTaskId === taskId &&
-    conversation.interruptRequested
-  );
+  const isCurrent = await isCurrentGeneration(conversationId, taskId, sender, isGroup);
+  return !isCurrent;
 }

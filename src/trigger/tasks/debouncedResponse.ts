@@ -3,6 +3,7 @@ import { respondToMessage } from "@/src/ai/respondToMessage";
 import {
   acquireResponseLock,
   getConversationMessages,
+  isCurrentGeneration,
   releaseResponseLock,
 } from "@/src/db/conversation";
 import { createContextLogger } from "@/src/lib/logger";
@@ -107,23 +108,9 @@ export const debouncedResponse = task({
     preset: "medium-1x", // 1 vCPU, 2 GB RAM (increased for AI SDK + Anthropic)
   },
   run: async (payload: DebouncedResponsePayload, { ctx }) => {
-    const taskId = ctx.run.id; // Unique ID for this task run
+    const taskId = ctx.run.id;
     const isGroup = !!payload.group;
-    // For group chats, recipient is the sender of the message
     const sender = isGroup ? payload.recipient : undefined;
-
-    // Wait 1 second (debounce period) to batch rapid messages
-    await wait.for({ seconds: 1 });
-
-    // Try to acquire the response lock
-    // For DMs: conversation-level lock (prevents duplicate responses)
-    // For Group Chats: per-sender lock (allows parallel responses from different senders)
-    const lockAcquired = await acquireResponseLock(
-      payload.conversationId,
-      taskId,
-      sender,
-      isGroup,
-    );
 
     const log = createContextLogger({
       component: "debouncedResponse",
@@ -132,40 +119,12 @@ export const debouncedResponse = task({
       sender,
     });
 
-    if (!lockAcquired) {
-      // For group chats, if we can't acquire lock for this sender, just skip
-      // (their previous message is still being processed)
-      if (isGroup) {
-        log.info("Sender already has active response, skipping duplicate");
-        return {
-          skipped: true,
-          reason: "sender_response_in_progress",
-        };
-      }
+    // Wait 1 second (debounce period) to batch rapid messages
+    await wait.for({ seconds: 1 });
 
-      // For DMs: try to interrupt and retry
-      log.info("Another response is active, interrupting and waiting");
-      // Wait for the interrupt to take effect (give it 2 seconds max)
-      await wait.for({ seconds: 2 });
-
-      // Try to acquire lock again
-      const retryLock = await acquireResponseLock(
-        payload.conversationId,
-        taskId,
-        sender,
-        isGroup,
-      );
-      if (!retryLock) {
-        log.info("Could not acquire lock, giving up");
-        return {
-          skipped: true,
-          reason: "lock_acquisition_failed",
-        };
-      }
-    }
-
-    // Lock acquired, safe to respond
-    log.info("Responding after debounce");
+    // Acquire lock (always succeeds, overwrites previous - old task will abort via polling)
+    await acquireResponseLock(payload.conversationId, taskId, sender, isGroup);
+    log.info("Lock acquired, starting generation");
 
     // Get conversation history and context (last 100 messages)
     const { messages, context } = await getConversationMessages(
@@ -201,9 +160,19 @@ export const debouncedResponse = task({
       log.debug("Conversation has summary", { summary: context.summary });
     }
 
-    // Generate AI response with full conversation context
+    // Create AbortController for cancellation when superseded
+    const abortController = new AbortController();
+    const checkShouldAbort = async () => {
+      const isCurrent = await isCurrentGeneration(
+        payload.conversationId,
+        taskId,
+        sender,
+        isGroup,
+      );
+      return !isCurrent;
+    };
+
     try {
-      // Create callback to send quick notification when tools are invoked
       const onToolsInvoked = async (toolNames: string[]) => {
         const loadingMessage = getLoadingMessage(toolNames);
         log.info("Sending tool notification", {
@@ -219,7 +188,6 @@ export const debouncedResponse = task({
             ...baseParams,
             text: loadingMessage,
           });
-          log.info("Tool notification sent");
         } catch (err) {
           log.error("Failed to send tool notification", { error: err });
         }
@@ -229,26 +197,26 @@ export const debouncedResponse = task({
         mrWhiskersAgent,
         messages,
         context,
-        { onToolsInvoked },
+        { onToolsInvoked, abortController, checkShouldAbort },
       );
 
-      // If no actions, we're done (e.g., group chat where no response is needed)
+      // Check if we were aborted (superseded by newer task)
+      if (abortController.signal.aborted) {
+        log.info("Generation aborted (superseded)");
+        return { skipped: true, reason: "superseded" };
+      }
+
       if (actions.length === 0) {
-        log.info("No actions to execute (likely group chat silence)");
+        log.info("No actions to execute");
         await releaseResponseLock(
           payload.conversationId,
           taskId,
           sender,
           isGroup,
         );
-        return {
-          success: true,
-          actionsExecuted: 0,
-          noResponseNeeded: true,
-        };
+        return { success: true, actionsExecuted: 0, noResponseNeeded: true };
       }
 
-      // Execute the actions via the existing handleMessageResponse
       await handleMessageResponse.triggerAndWait({
         conversationId: payload.conversationId,
         recipient: payload.recipient,
@@ -259,12 +227,8 @@ export const debouncedResponse = task({
         isGroup,
       });
 
-      return {
-        success: true,
-        actionsExecuted: actions.length,
-      };
+      return { success: true, actionsExecuted: actions.length };
     } catch (error) {
-      // Release lock on error
       await releaseResponseLock(
         payload.conversationId,
         taskId,
