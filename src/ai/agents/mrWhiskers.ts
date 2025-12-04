@@ -1,5 +1,5 @@
 import { createImageTool } from "@/src/ai/tools";
-import { webSearchPerplexityTool } from "@/src/components/ai-tools/websearch/tool";
+import { grokSearchTool } from "@/src/ai/tools/search";
 import { IMessageResponseSchema } from "@/src/lib/loopmessage-sdk/actions";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createAgent } from "./factory";
@@ -27,6 +27,6 @@ export const mrWhiskersAgent = createAgent({
   tools: {
     // Static tools
     createImage: createImageTool,
-    webSearch: webSearchPerplexityTool,
+    search: grokSearchTool,
   },
 });
