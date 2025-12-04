@@ -31,9 +31,17 @@ export interface RespondToMessageOptions {
   /**
    * Optional callback fired once when the first tool call is about to execute.
    * Use this to send a "working on it" notification to the user.
-   * @param toolNames - Array of tool names being invoked
    */
   onToolsInvoked?: (toolNames: string[]) => Promise<void>;
+  /**
+   * AbortController for cancelling generation when superseded by a newer task.
+   */
+  abortController?: AbortController;
+  /**
+   * Polling callback to check if this generation should abort.
+   * Called every 300ms during generation.
+   */
+  checkShouldAbort?: () => Promise<boolean>;
 }
 
 /**
@@ -213,20 +221,34 @@ export async function respondToMessage(
     messageCount: messagesWithImageContext.length,
   });
 
+  // Start polling interval if checkShouldAbort is provided
+  let pollInterval: ReturnType<typeof setInterval> | null = null;
+  if (options?.checkShouldAbort && options?.abortController) {
+    pollInterval = setInterval(async () => {
+      try {
+        const shouldAbort = await options.checkShouldAbort!();
+        if (shouldAbort) {
+          log.info("Generation superseded, aborting");
+          options.abortController!.abort();
+          if (pollInterval) clearInterval(pollInterval);
+        }
+      } catch (err) {
+        log.error("Error in checkShouldAbort", { error: err });
+      }
+    }, 300);
+  }
+
   try {
-    // Generate response - the agent handles tool calling and structured output automatically
-    // Use messages parameter (accepts ModelMessage[])
     const result = await loopAgent.generate({
       messages: messagesWithImageContext,
+      abortSignal: options?.abortController?.signal,
     });
 
     const after = performance.now();
     log.info("Response generated", { timeMs: Math.round(after - before) });
 
-    // Log tool calls if any were made
     if (result.steps && result.steps.length > 0) {
       result.steps.forEach((step, stepIdx) => {
-        // Log tool calls from this step
         if (step.toolCalls && step.toolCalls.length > 0) {
           step.toolCalls.forEach((toolCall) => {
             log.debug("Tool call", {
@@ -237,14 +259,12 @@ export async function respondToMessage(
           });
         }
 
-        // Log tool results from this step
         if (step.toolResults && step.toolResults.length > 0) {
           step.toolResults.forEach((toolResult) => {
             const output = toolResult.output as
               | { success?: boolean; message?: string }
               | undefined;
 
-            // Log errors prominently
             if (
               output &&
               typeof output === "object" &&
@@ -272,10 +292,16 @@ export async function respondToMessage(
     return actions;
   } catch (error) {
     const after = performance.now();
+    if (options?.abortController?.signal.aborted) {
+      log.info("Generation aborted", { timeMs: Math.round(after - before) });
+      return [];
+    }
     log.error("Error generating response", {
       timeMs: Math.round(after - before),
       error,
     });
     throw error;
+  } finally {
+    if (pollInterval) clearInterval(pollInterval);
   }
 }
