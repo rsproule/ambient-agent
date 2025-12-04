@@ -34,5 +34,8 @@ export { createCalendarTools } from "./calendar";
 export { createGitHubTools } from "./github";
 export { createGmailTools } from "./gmail";
 
+// Search tool (unified web + X search via xAI Grok)
+export { grokSearchTool } from "./search";
+
 // Helpers
 export { getAuthenticatedUserId, hasActiveConnections } from "./helpers";
