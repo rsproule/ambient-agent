@@ -33,6 +33,7 @@ export { createImageTool } from "./createImage";
 export { createCalendarTools } from "./calendar";
 export { createGitHubTools } from "./github";
 export { createGmailTools } from "./gmail";
+export { createTwitterTools } from "./twitter";
 
 // Helpers
 export { getAuthenticatedUserId, hasActiveConnections } from "./helpers";

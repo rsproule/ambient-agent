@@ -8,6 +8,7 @@
 export { checkCalendar } from "./checkCalendar";
 export { checkGitHub } from "./checkGitHub";
 export { checkGmail } from "./checkGmail";
+export { checkTwitter } from "./checkTwitter";
 export { checkConnectionReminder } from "./checkConnectionReminder";
 export { checkScheduledJobs } from "./checkScheduledJobs";
 export { checkDeepResearch } from "./checkDeepResearch";

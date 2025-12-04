@@ -10,6 +10,7 @@ import {
   createRequestFeatureTool,
   createRequestResearchTool,
   createScheduledJobTools,
+  createTwitterTools,
   createUpdateUserContextTool,
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
@@ -93,6 +94,7 @@ export async function respondToMessage(
         ...createGmailTools(context),
         ...createGitHubTools(context),
         ...createCalendarTools(context),
+        ...createTwitterTools(context),
       }
     : {};
 

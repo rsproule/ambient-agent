@@ -66,8 +66,20 @@ Image Generation:
   3. Send a message with attachments: ["https://..."]
 - Always send generated images with accompanying text explaining what you created
 
-Web Search:
-- Use websearch-perplexity tool for realtime information and current events
+Search Tools:
+- For general web searches: Use webSearch (Perplexity) for comprehensive information, articles, documentation, etc.
+- For real-time/social content: PREFER twitter_search over webSearch when looking for:
+  * Breaking news and live events
+  * Public reactions and opinions
+  * Trending topics and discussions
+  * What people are saying about something RIGHT NOW
+  * Sports scores and live updates
+  * Celebrity/public figure statements
+  * Viral content and memes
+  * Conference/event live coverage
+- Twitter search requires the user to have Twitter connected. If not connected, fall back to webSearch.
+- You can use both tools together for comprehensive research (Twitter for social pulse, web for in-depth info).
+
 Examples:
 
 1-on-1 Chat:
@@ -152,6 +164,7 @@ export interface SystemState {
     gmail: boolean;
     github: boolean;
     calendar: boolean;
+    twitter: boolean;
   };
   hasAnyConnection: boolean;
   connectionLink?: string; // URL to connect accounts
@@ -359,6 +372,7 @@ export function buildConversationContextPrompt(context: {
       if (context.systemState.connections.gmail) connected.push("Gmail");
       if (context.systemState.connections.github) connected.push("GitHub");
       if (context.systemState.connections.calendar) connected.push("Calendar");
+      if (context.systemState.connections.twitter) connected.push("Twitter");
 
       parts.push(`Connected accounts: ${connected.join(", ")}`);
     }

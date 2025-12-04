@@ -9,6 +9,7 @@ export type HookName =
   | "calendar"
   | "github"
   | "gmail"
+  | "twitter"
   | "connectionReminder"
   | "scheduledJobs"
   | "deepResearch";
@@ -43,6 +44,7 @@ export interface HookContext {
     gmail: boolean;
     github: boolean;
     calendar: boolean;
+    twitter: boolean;
   };
 }
 
@@ -62,6 +64,8 @@ export interface HookScheduleConfig {
   github: number;
   /** Check Gmail every N minutes (default: 120 - don't spam about emails) */
   gmail: number;
+  /** Check Twitter feed every N minutes (default: 60 - surface interesting discussions) */
+  twitter: number;
   /** Check for connection reminder every N minutes (default: 10080 = 7 days) */
   connectionReminder: number;
   /** Check scheduled jobs every N minutes (default: 15 - matches cron) */
@@ -77,6 +81,7 @@ export const DEFAULT_HOOK_SCHEDULES: HookScheduleConfig = {
   calendar: 15, // Every 15 min - need to catch upcoming meetings
   github: 60, // Every hour - PR reviews can wait a bit
   gmail: 120, // Every 2 hours - don't spam about emails
+  twitter: 60, // Every hour - surface interesting discussions from timeline
   connectionReminder: 10080, // Once a week (7 * 24 * 60)
   scheduledJobs: 15, // Every 15 min - matches the cron frequency
   deepResearch: 480, // Every 8 hours - keeps user context fresh

@@ -18,6 +18,7 @@ import {
   checkGitHub,
   checkGmail,
   checkScheduledJobs,
+  checkTwitter,
 } from "@/src/lib/proactive/hooks";
 import {
   DEFAULT_HOOK_CONFIG,
@@ -76,13 +77,18 @@ const HOOK_REGISTRY: HookDefinition[] = (
       execute: checkGmail,
     },
     {
+      name: "twitter" as const,
+      priority: 5, // Social feed - interesting but not urgent
+      execute: checkTwitter,
+    },
+    {
       name: "connectionReminder" as const,
-      priority: 5, // Low priority
+      priority: 6, // Low priority
       execute: (ctx: HookContext) => checkConnectionReminder(ctx, 7), // 7 days between reminders
     },
     {
       name: "deepResearch" as const,
-      priority: 6, // Background task, lowest priority
+      priority: 7, // Background task, lowest priority
       execute: checkDeepResearch,
     },
   ] satisfies HookDefinition[]
@@ -112,6 +118,9 @@ async function buildHookContext(userId: string): Promise<HookContext | null> {
   );
   const calendarConnected = connections.some(
     (c) => c.provider === "google_calendar" && c.status === "connected",
+  );
+  const twitterConnected = connections.some(
+    (c) => c.provider === "twitter" && c.status === "connected",
   );
 
   // Get recent messages for deduplication
@@ -147,6 +156,7 @@ async function buildHookContext(userId: string): Promise<HookContext | null> {
       gmail: gmailConnected,
       github: githubConnected,
       calendar: calendarConnected,
+      twitter: twitterConnected,
     },
   };
 }

@@ -120,6 +120,9 @@ async function buildScheduledJobContext(
         const calendarConnected = connections.some(
           (c) => c.provider === "google_calendar" && c.status === "connected",
         );
+        const twitterConnected = connections.some(
+          (c) => c.provider === "twitter" && c.status === "connected",
+        );
 
         const timezone = job.timezone || userContext?.timezone || "America/Los_Angeles";
         const now = new Date();
@@ -147,8 +150,9 @@ async function buildScheduledJobContext(
             gmail: gmailConnected,
             github: githubConnected,
             calendar: calendarConnected,
+            twitter: twitterConnected,
           },
-          hasAnyConnection: gmailConnected || githubConnected || calendarConnected,
+          hasAnyConnection: gmailConnected || githubConnected || calendarConnected || twitterConnected,
           researchStatus: userContext ? "completed" : "none",
           outboundOptIn: user.outboundOptIn,
           timezoneSource: timezone ? "known" : "default",
@@ -183,7 +187,7 @@ async function buildScheduledJobContext(
           weekday: "long",
         }),
       },
-      connections: { gmail: false, github: false, calendar: false },
+      connections: { gmail: false, github: false, calendar: false, twitter: false },
       hasAnyConnection: false,
     };
   }

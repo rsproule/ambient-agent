@@ -3,7 +3,7 @@
  */
 
 import type { LucideIcon } from "lucide-react";
-import { Mail, Calendar, Github } from "lucide-react";
+import { Mail, Calendar, Github, Twitter } from "lucide-react";
 
 export interface ProviderConfig {
   id: string;
@@ -49,6 +49,20 @@ export const PROVIDERS: Record<string, ProviderConfig> = {
       "user:email",
     ],
     description: "Access your GitHub repositories and profile",
+  },
+  twitter: {
+    id: "twitter",
+    name: "Twitter/X",
+    app: "twitter",
+    icon: Twitter,
+    scopes: [
+      "tweet.read",
+      "tweet.write",
+      "users.read",
+      "follows.read",
+      "offline.access",
+    ],
+    description: "Access your Twitter feed, search tweets, and draft posts",
   },
 };
 

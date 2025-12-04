@@ -162,6 +162,7 @@ enum ConnectionProvider {
   google_gmail
   google_calendar
   github
+  twitter
 }
 
 enum ConnectionStatus {

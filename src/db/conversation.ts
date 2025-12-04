@@ -460,6 +460,9 @@ export async function getConversationMessages(
         const calendarConnected = connections.some(
           (c) => c.provider === "google_calendar" && c.status === "connected",
         );
+        const twitterConnected = connections.some(
+          (c) => c.provider === "twitter" && c.status === "connected",
+        );
 
         // Get timezone: prefer stored, then try calendar, then null (will prompt user)
         let userTimezone = researchContext?.timezone || null;
@@ -486,9 +489,10 @@ export async function getConversationMessages(
             gmail: gmailConnected,
             github: githubConnected,
             calendar: calendarConnected,
+            twitter: twitterConnected,
           },
           hasAnyConnection:
-            gmailConnected || githubConnected || calendarConnected,
+            gmailConnected || githubConnected || calendarConnected || twitterConnected,
           researchStatus: researchContext ? "completed" : "none",
           outboundOptIn: user.outboundOptIn,
           timezoneSource: userTimezone ? "known" : "default",
@@ -507,7 +511,7 @@ export async function getConversationMessages(
   if (!systemState) {
     systemState = {
       currentTime: getCurrentTimeInfo("America/Los_Angeles"),
-      connections: { gmail: false, github: false, calendar: false },
+      connections: { gmail: false, github: false, calendar: false, twitter: false },
       hasAnyConnection: false,
     };
   }
