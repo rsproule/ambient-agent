@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { QueryProvider } from "@/src/components/providers/QueryProvider";
+import { PrivyProvider } from "@/src/components/providers/PrivyProvider";
 import { SessionProvider } from "next-auth/react";
 import { Navbar } from "@/src/components/Navbar";
 
@@ -49,8 +50,10 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`} 
       >
         <SessionProvider>
-          <Navbar />
-          <QueryProvider>{children}</QueryProvider>
+          <PrivyProvider>
+            <Navbar />
+            <QueryProvider>{children}</QueryProvider>
+          </PrivyProvider>
         </SessionProvider>
       </body>
     </html>
