@@ -14,11 +14,11 @@ import {
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
+import logger from "@/src/lib/logger";
 import type {
   IMessageResponse,
   MessageAction,
 } from "@/src/lib/loopmessage-sdk/actions";
-import logger from "@/src/lib/logger";
 import { Output, ToolLoopAgent, type ModelMessage } from "ai";
 
 // Re-export MessageAction type for convenience
@@ -85,7 +85,8 @@ export async function respondToMessage(
 
   // Add DM-only tools (connection link not available in groups to prevent spam)
   if (!context.isGroup) {
-    contextBoundTools.generateConnectionLink = createGenerateConnectionLinkTool(context);
+    contextBoundTools.generateConnectionLink =
+      createGenerateConnectionLinkTool(context);
   }
 
   // Add group chat-only tools (settings management)
@@ -159,10 +160,17 @@ export async function respondToMessage(
     }),
     // Fire callback on first tool call to notify user we're working
     onStepFinish: async ({ toolCalls }) => {
-      if (toolCalls && toolCalls.length > 0 && !hasNotifiedToolUse && options?.onToolsInvoked) {
+      if (
+        toolCalls &&
+        toolCalls.length > 0 &&
+        !hasNotifiedToolUse &&
+        options?.onToolsInvoked
+      ) {
         hasNotifiedToolUse = true;
-        const toolNames = toolCalls.map(tc => tc.toolName);
-        log.info("Tool call detected, firing onToolsInvoked", { tools: toolNames });
+        const toolNames = toolCalls.map((tc) => tc.toolName);
+        log.info("Tool call detected, firing onToolsInvoked", {
+          tools: toolNames,
+        });
         try {
           await options.onToolsInvoked(toolNames);
         } catch (err) {
@@ -179,18 +187,20 @@ export async function respondToMessage(
   log.debug("Recent attachments", {
     count: context.recentAttachments?.length ?? 0,
   });
-  
+
   if (context.recentAttachments && context.recentAttachments.length > 0) {
     // Include up to 3 most recent images for context (to limit token usage)
     const imagesToShow = context.recentAttachments.slice(0, 3);
     // Build content with labeled images and their URLs
-    const imageContent: Array<{ type: "text"; text: string } | { type: "image"; image: URL }> = [
+    const imageContent: Array<
+      { type: "text"; text: string } | { type: "image"; image: URL }
+    > = [
       {
         type: "text",
         text: `[CONTEXT: Recent images in this conversation. When user asks to edit/modify an image, use createImage with the image's URL:]`,
       },
     ];
-    
+
     imagesToShow.forEach((url, i) => {
       imageContent.push({ type: "text", text: `[Image ${i} URL: ${url}]` });
       imageContent.push({ type: "image", image: new URL(url) });
@@ -286,8 +296,19 @@ export async function respondToMessage(
       });
     }
 
-    const actions = (result.output as IMessageResponse).actions;
-    log.info("Generated actions", { actionCount: actions.length });
+    const output = result.output as IMessageResponse;
+    const actions = output.actions;
+
+    if (actions.length === 0) {
+      log.info("AI returned 0 actions", {
+        isGroup: context.isGroup,
+        sender: context.sender,
+        stepCount: result.steps?.length ?? 0,
+        reason: output.noResponseReason ?? "none provided",
+      });
+    } else {
+      log.info("Generated actions", { actionCount: actions.length });
+    }
 
     return actions;
   } catch (error) {

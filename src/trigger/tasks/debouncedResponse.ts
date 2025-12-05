@@ -207,7 +207,17 @@ export const debouncedResponse = task({
       }
 
       if (actions.length === 0) {
-        log.info("No actions to execute");
+        const lastMsg = messages[messages.length - 1];
+        const lastMsgPreview =
+          typeof lastMsg?.content === "string"
+            ? lastMsg.content.slice(0, 100)
+            : JSON.stringify(lastMsg?.content)?.slice(0, 100);
+        log.warn("AI decided not to respond", {
+          isGroup,
+          sender: context.sender,
+          messageCount: messages.length,
+          lastMessage: lastMsgPreview,
+        });
         await releaseResponseLock(
           payload.conversationId,
           taskId,

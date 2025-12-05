@@ -79,6 +79,12 @@ export const IMessageResponseSchema = z.object({
     .describe(
       "Array of actions to perform in sequence. Can be empty if no response is needed.",
     ),
+  noResponseReason: z
+    .string()
+    .optional()
+    .describe(
+      "If actions is empty, briefly explain why (e.g., 'not addressed', 'reaction only needed', 'safety concern')",
+    ),
 });
 
 export type MessageAction = z.infer<typeof MessageActionSchema>;
