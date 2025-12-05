@@ -1,4 +1,4 @@
-import { createPublicClient, http, formatUnits, type Address } from "viem";
+import { createPublicClient, formatUnits, http, type Address } from "viem";
 import { base } from "viem/chains";
 import { blockchainConfig } from "../config/env";
 

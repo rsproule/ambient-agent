@@ -4,7 +4,7 @@ import { Loader } from "@/src/components/loader";
 import { Button } from "@/src/components/ui/button";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ArrowUpRight, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowUpRight, RefreshCw, Wallet } from "lucide-react";
 import type { Address } from "viem";
 
 interface BalanceData {
@@ -32,12 +32,18 @@ function BalancePageContent() {
   const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
   const walletAddress = embeddedWallet?.address as Address | undefined;
 
-  const { data: balanceData, isLoading } = useQuery({
+  const {
+    data: balanceData,
+    isLoading,
+    error,
+    refetch,
+  } = useQuery({
     queryKey: ["balance", walletAddress],
     queryFn: () => fetchBalanceData(walletAddress!),
     enabled: !!walletAddress,
     staleTime: 30 * 1000,
     refetchInterval: 60 * 1000,
+    retry: 2,
   });
 
   const balance = balanceData?.balance ?? null;
@@ -103,6 +109,24 @@ function BalancePageContent() {
         {isLoading && !balance ? (
           <div className="h-20 flex items-center justify-center">
             <Loader />
+          </div>
+        ) : error ? (
+          <div className="mb-8">
+            <p className="text-2xl font-semibold text-red-500 mb-2">
+              Unable to load balance
+            </p>
+            <p className="text-sm text-muted-foreground mb-4">
+              {error instanceof Error ? error.message : "Something went wrong"}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refetch()}
+              className="gap-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              Retry
+            </Button>
           </div>
         ) : (
           <p className="text-6xl font-bold tracking-tight mb-8">
