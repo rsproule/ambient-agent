@@ -3,7 +3,7 @@
 import { useSession, signOut } from "next-auth/react";
 import Link from "next/link";
 import Image from "next/image";
-import { ChevronDown, Zap, LogOut, Clock } from "lucide-react";
+import { ChevronDown, Zap, LogOut, Clock, Wallet } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +98,13 @@ export function Navbar() {
                   <Link href="/scheduled-jobs" className="flex items-center gap-2">
                     <Clock className="w-4 h-4" />
                     Scheduled Jobs
+                  </Link>
+                </DropdownMenuItem>
+
+                <DropdownMenuItem asChild>
+                  <Link href="/balance" className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4" />
+                    Balance
                   </Link>
                 </DropdownMenuItem>
                 

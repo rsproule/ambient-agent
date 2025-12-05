@@ -36,6 +36,13 @@ const envSchema = z.object({
   // Base URL
   NEXT_PUBLIC_BASE_URL: z.string().url().optional(),
 
+  // Privy configuration
+  NEXT_PUBLIC_PRIVY_APP_ID: z.string().optional(),
+  PRIVY_APP_SECRET: z.string().optional(),
+
+  // Blockchain configuration
+  NEXT_PUBLIC_BASE_RPC_URL: z.string().url().optional(),
+
   // Node environment
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -129,6 +136,21 @@ export const nextAuthConfig = {
   },
   get secret() {
     return env.NEXTAUTH_SECRET;
+  },
+};
+
+export const privyConfig = {
+  get appId() {
+    return env.NEXT_PUBLIC_PRIVY_APP_ID;
+  },
+  get appSecret() {
+    return env.PRIVY_APP_SECRET;
+  },
+};
+
+export const blockchainConfig = {
+  get baseRpcUrl() {
+    return env.NEXT_PUBLIC_BASE_RPC_URL;
   },
 };
 
