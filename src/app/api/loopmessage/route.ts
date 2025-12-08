@@ -21,17 +21,52 @@ import { NextResponse } from "next/server";
  * https://docs.loopmessage.com/webhooks
  */
 const LOOPMESSAGE_ERROR_CODES: Record<number, string> = {
-  100: "Unknown error - An unexpected error occurred",
-  110: "Invalid recipient - The recipient phone number or email is invalid or cannot receive iMessages",
-  120: "Message blocked - The recipient has blocked you or uses filters for unknown senders",
-  130: "Timeout - Failed to deliver the message within the specified timeout period",
-  140: "Network error - A network issue prevented message delivery",
-  150: "Rate limited - Too many messages sent, please slow down",
+  100: "Bad request",
+  110: "Missing credentials in request",
+  120: "One or more required parameters for the request are missing",
+  125: "Authorization key is invalid or does not exist",
+  130: "Secret key is invalid or does not exist",
+  140: "No 'text' parameter in request",
+  150: "No 'recipient' parameter in request",
+  160: "Invalid recipient",
+  170: "Invalid recipient email",
+  180: "Invalid recipient phone number",
+  190: "A phone number is not mobile",
+  210: "Sender name not specified in request parameters",
+  220: "Invalid sender name",
+  230: "An internal error occurred while trying to use the specified sender name",
+  240: "Sender name is not activated or unpaid",
+  270: "This recipient blocked any type of messages",
+  300: "Unable to send this type of message without dedicated sender name",
+  330: "You send messages too frequently to recipients you haven't contacted for a long time",
+  400: "No available requests/credits on your balance",
+  500: "Your account is suspended",
+  510: "Your account is blocked",
+  530: "Your account is suspended due to debt",
+  540: "No active purchased sender name to send message",
+  545: "Your sender name has been suspended by Apple",
+  550: "Requires a dedicated sender name or need to add this recipient as sandbox contact",
+  560: "Unable to send outbound messages until this recipient initiates a conversation with your sender",
+  570: "This API request is deprecated and not supported",
+  580: "Invalid effect parameter",
+  590: "Invalid message_id for reply",
+  595: "Invalid or non-existent message_id",
+  600: "Invalid reaction parameter",
+  610: "Reaction or message_id is invalid or does not exist",
+  620: "Unable to use effect and reaction parameters in the same request",
+  630: "Need to set up a vCard file for this sender name in the dashboard",
+  640: "No media file URL - media_url",
+  1110: "Unable to send SMS if the recipient is an email address",
+  1120: "Unable to send SMS if the recipient is group",
+  1130: "Unable to send SMS with marketing content",
+  1140: "Unable to send audio messages through SMS",
 };
 
 export async function POST(request: Request) {
+  let rawWebhook: unknown;
+
   try {
-    const rawWebhook = await request.json();
+    rawWebhook = await request.json();
 
     // Validate webhook structure with Zod
     const webhook = LoopWebhookSchema.parse(rawWebhook);
@@ -79,6 +114,7 @@ export async function POST(request: Request) {
     if (error instanceof Error && error.name === "ZodError") {
       logger.error("Invalid webhook structure", {
         error: error.message,
+        rawWebhook,
         component: "loopmessage",
       });
       return NextResponse.json(
@@ -92,6 +128,7 @@ export async function POST(request: Request) {
 
     logger.error("Error processing webhook", {
       error,
+      rawWebhook,
       component: "loopmessage",
     });
     return NextResponse.json(
@@ -266,58 +303,15 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
     sender: webhook.recipient,
   });
 
-  log.error("MESSAGE DELIVERY FAILED", {
-    alert_type: "message_failed",
+  log.error(`MESSAGE DELIVERY FAILED: ${errorDescription}`, {
     error_code: webhook.error_code,
-    error_description: errorDescription,
     recipient: webhook.recipient,
     message_id: webhook.message_id,
-    text_preview: webhook.text,
-    passthrough: webhook.passthrough,
-    full_webhook: webhook,
   });
-
-  // Log additional context based on error code
-  switch (webhook.error_code) {
-    case 110:
-      log.error(
-        "INVALID RECIPIENT - This user cannot receive iMessages. They may be an Android user or have an invalid identifier.",
-        {
-          recipient: webhook.recipient,
-          suggestion: "Consider SMS fallback or alternative contact method",
-        },
-      );
-      break;
-    case 120:
-      log.error(
-        "MESSAGE BLOCKED - Recipient has blocked this sender or uses unknown sender filters",
-        {
-          recipient: webhook.recipient,
-          suggestion:
-            "User may need to add sender to contacts or disable filters",
-        },
-      );
-      break;
-    case 140:
-      log.error("NETWORK ERROR - Temporary network issue prevented delivery", {
-        recipient: webhook.recipient,
-        suggestion: "Message may be retried automatically",
-      });
-      break;
-    case 150:
-      log.error("RATE LIMITED - Too many messages sent too quickly", {
-        recipient: webhook.recipient,
-        suggestion: "Implement backoff or reduce message frequency",
-      });
-      break;
-  }
 }
 
 /**
  * Handle message_sent webhook - check if delivery actually succeeded
- *
- * success: true = delivered successfully
- * success: false = sent but NOT delivered (e.g., recipient blocked you, unknown sender filter)
  */
 function handleMessageSent(webhook: MessageSentWebhook): void {
   const log = createContextLogger({
@@ -326,41 +320,24 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
     sender: webhook.recipient,
   });
 
+  const isReaction = !!webhook.reaction;
+
   if (webhook.success === false) {
     log.error("MESSAGE SENT BUT NOT DELIVERED", {
-      alert_type: "message_sent",
       success: false,
       delivery_type: webhook.delivery_type,
       recipient: webhook.recipient,
       message_id: webhook.message_id,
-      text_preview: webhook.text?.substring(0, 100),
-      passthrough: webhook.passthrough,
-      full_webhook: webhook,
+      reaction: webhook.reaction,
     });
-
-    log.error(
-      "DELIVERY FAILED ON RECIPIENT SIDE - Message was sent but recipient did not receive it",
-      {
-        recipient: webhook.recipient,
-        delivery_type: webhook.delivery_type,
-        possible_causes: [
-          "Recipient has blocked this sender",
-          "Recipient uses 'Filter Unknown Senders' setting",
-          "Message filtered to 'Unknown Senders' folder",
-          "iMessage delivery issue on recipient's device",
-        ],
-        suggestion:
-          "This is equivalent to 'Not Delivered' status in Messages app. User may need to add sender to contacts.",
-      },
-    );
   } else {
-    // Success - just log at info level
-    log.info("Message delivered successfully", {
-      alert_type: "message_sent",
-      success: true,
+    log.info(isReaction ? "Reaction sent" : "Message delivered", {
+      success: webhook.success,
       delivery_type: webhook.delivery_type,
       recipient: webhook.recipient,
       message_id: webhook.message_id,
+      reaction: webhook.reaction,
+      reaction_event: webhook.reaction_event,
     });
   }
 }

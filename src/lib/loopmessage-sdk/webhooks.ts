@@ -163,13 +163,20 @@ export const MessageFailedWebhookSchema = BaseWebhookSchema.extend({
 
 /**
  * Message Sent webhook schema - exact API match
+ * Note: success may be absent for reaction confirmations
  */
 export const MessageSentWebhookSchema = BaseWebhookSchema.extend({
   alert_type: z.literal("message_sent"),
-  /** Indicates if message was delivered successfully */
-  success: z.boolean(),
+  /** Indicates if message was delivered successfully (may be absent for reactions) */
+  success: z.boolean().optional(),
   /** How the message was sent */
   delivery_type: DeliveryTypeSchema.optional(),
+  /** Reaction type if this is a reaction confirmation */
+  reaction: ReactionTypeSchema.optional(),
+  /** Direction of reaction (inbound/outbound) */
+  reaction_direction: z.enum(["inbound", "outbound"]).optional(),
+  /** Reaction event type (placed/removed) */
+  reaction_event: z.enum(["placed", "removed"]).optional(),
 });
 
 /**
@@ -271,12 +278,18 @@ export type SpeechMetadata = z.infer<typeof SpeechMetadataSchema>;
 export type Speech = z.infer<typeof SpeechSchema>;
 export type Group = z.infer<typeof GroupSchema>;
 
-export type MessageScheduledWebhook = z.infer<typeof MessageScheduledWebhookSchema>;
-export type ConversationInitedWebhook = z.infer<typeof ConversationInitedWebhookSchema>;
+export type MessageScheduledWebhook = z.infer<
+  typeof MessageScheduledWebhookSchema
+>;
+export type ConversationInitedWebhook = z.infer<
+  typeof ConversationInitedWebhookSchema
+>;
 export type MessageFailedWebhook = z.infer<typeof MessageFailedWebhookSchema>;
 export type MessageSentWebhook = z.infer<typeof MessageSentWebhookSchema>;
 export type MessageInboundWebhook = z.infer<typeof MessageInboundWebhookSchema>;
-export type MessageReactionWebhook = z.infer<typeof MessageReactionWebhookSchema>;
+export type MessageReactionWebhook = z.infer<
+  typeof MessageReactionWebhookSchema
+>;
 export type MessageTimeoutWebhook = z.infer<typeof MessageTimeoutWebhookSchema>;
 export type GroupCreatedWebhook = z.infer<typeof GroupCreatedWebhookSchema>;
 export type InboundCallWebhook = z.infer<typeof InboundCallWebhookSchema>;
