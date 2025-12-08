@@ -69,3 +69,39 @@ export async function retryMessage(
   }
   return response.json();
 }
+
+export interface LoopMessageStatus {
+  message_id: string;
+  status:
+    | "processing"
+    | "scheduled"
+    | "failed"
+    | "sent"
+    | "timeout"
+    | "unknown";
+  recipient: string;
+  text: string;
+  sandbox?: boolean;
+  error_code?: number;
+  sender_name?: string;
+  passthrough?: string;
+  last_update?: string;
+}
+
+export interface CheckMessageStatusResponse {
+  success: boolean;
+  localMessageId: string;
+  loopMessageId: string;
+  status: LoopMessageStatus;
+}
+
+export async function checkMessageStatus(
+  messageId: string,
+): Promise<CheckMessageStatusResponse> {
+  const response = await fetch(`/api/admin/messages/${messageId}/status`);
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to check message status");
+  }
+  return response.json();
+}
