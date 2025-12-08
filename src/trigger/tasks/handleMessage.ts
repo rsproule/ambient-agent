@@ -130,6 +130,7 @@ async function executeAction(
   console.log(
     `Executing ${action.type} action for conversation ${payload.conversationId}`,
     baseParams,
+    action,
   );
 
   switch (action.type) {
