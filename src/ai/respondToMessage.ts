@@ -11,6 +11,7 @@ import {
   createRequestResearchTool,
   createScheduledJobTools,
   createUpdateUserContextTool,
+  createWagerTools,
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
@@ -89,10 +90,11 @@ export async function respondToMessage(
       createGenerateConnectionLinkTool(context);
   }
 
-  // Add group chat-only tools (settings management)
+  // Add group chat-only tools (settings management, wagering)
   if (context.isGroup) {
     const groupTools = createGroupChatSettingsTools(context);
-    Object.assign(contextBoundTools, groupTools);
+    const wagerTools = createWagerTools(context);
+    Object.assign(contextBoundTools, groupTools, wagerTools);
   }
 
   // Conditionally merge integration tools only if user has connections

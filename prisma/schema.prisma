@@ -350,3 +350,64 @@ model FeatureRequest {
   @@index([createdAt])
   @@index([phoneNumber])
 }
+
+// ============================================
+// Group Chat Wagering
+// ============================================
+
+enum WagerStatus {
+  open // Market open, accepting positions (may have unmatched bets)
+  active // At least some amount matched, wager in progress
+  pending_verification // Deadline passed, awaiting resolution
+  resolved // Winner declared, payouts calculated
+  cancelled // Cancelled before any matching
+}
+
+enum VerificationType {
+  subjective // Group vote or honor system
+  deadline // Auto-resolves when time expires
+  photo_proof // Requires photo evidence
+}
+
+model Wager {
+  id             String @id @default(cuid())
+  conversationId String // Group chat ID
+  creatorPhone   String // Who proposed (doesn't have to bet)
+
+  title     String // "Pizza Arrival"
+  condition String // "Arrives before 7:45 PM"
+  sides     String[] // e.g. ["YES", "NO"] or ["UNDER", "OVER"]
+
+  verificationType   VerificationType
+  verificationConfig Json? // { deadline?: string, ... }
+
+  status     WagerStatus @default(open)
+  deadline   DateTime? // When betting closes / event happens
+  result     String? // Winning side
+  resolvedAt DateTime?
+  proofUrl   String?
+
+  positions WagerPosition[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([conversationId, status])
+  @@index([deadline])
+}
+
+model WagerPosition {
+  id      String @id @default(cuid())
+  wagerId String
+  wager   Wager  @relation(fields: [wagerId], references: [id], onDelete: Cascade)
+
+  phone         String // Who placed this position
+  side          String // Which side they're on
+  amount        Decimal @db.Decimal(10, 2) // Total amount wagered
+  matchedAmount Decimal @db.Decimal(10, 2) @default(0) // Amount matched against other side
+
+  createdAt DateTime @default(now())
+
+  @@index([wagerId])
+  @@index([phone])
+}
