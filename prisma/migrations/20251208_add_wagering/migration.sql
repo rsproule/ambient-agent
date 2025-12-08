@@ -52,3 +52,6 @@ CREATE INDEX "WagerPosition_phone_idx" ON "WagerPosition"("phone");
 
 -- AddForeignKey
 ALTER TABLE "WagerPosition" ADD CONSTRAINT "WagerPosition_wagerId_fkey" FOREIGN KEY ("wagerId") REFERENCES "Wager"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- Add wageringEnabled flag to GroupChatSettings
+ALTER TABLE "GroupChatSettings" ADD COLUMN "wageringEnabled" BOOLEAN NOT NULL DEFAULT false;

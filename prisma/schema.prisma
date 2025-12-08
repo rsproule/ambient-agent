@@ -328,6 +328,9 @@ model GroupChatSettings {
   // Users can describe how they want the AI to behave via natural language
   customPrompt String? @db.Text
 
+  // Wagering feature toggle - enables/disables wagering functionality for this group
+  wageringEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

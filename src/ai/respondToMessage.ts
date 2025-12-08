@@ -93,7 +93,7 @@ export async function respondToMessage(
   // Add group chat-only tools (settings management, wagering)
   if (context.isGroup) {
     const groupTools = createGroupChatSettingsTools(context);
-    const wagerTools = createWagerTools(context);
+    const wagerTools = await createWagerTools(context);
     Object.assign(contextBoundTools, groupTools, wagerTools);
   }
 
