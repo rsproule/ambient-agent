@@ -25,48 +25,60 @@ export const LoopMessageConfigSchema = z.object({
 /**
  * Parameters for sending a message - matches API exactly
  */
-export const SendMessageParamsSchema = z.object({
-  /** Phone number (with country code) or email for individual message */
-  recipient: z.string().optional(),
-  /** Group ID for group message (mutually exclusive with recipient) */
-  group: z.string().optional(),
-  /** Message text content (required, max 10,000 characters) */
-  text: z.string().max(10000, "Text must be less than 10,000 characters"),
-  /** Array of public HTTPS image URLs (max 3 attachments) */
-  attachments: z.array(z.string().url().startsWith("https://", "Attachments must be HTTPS URLs")).max(3, "Maximum 3 attachments allowed").optional(),
-  /** Subject line - displays as bold title before message text */
-  subject: z.string().optional(),
-  /** Visual effect for message delivery (iMessage only) */
-  effect: z.enum(MESSAGE_EFFECTS).optional(),
-  /** Message ID to reply to (creates threaded reply) */
-  reply_to_id: z.string().optional(),
-  /** Message ID to react to (required for reactions) */
-  message_id: z.string().optional(),
-  /** Type of reaction to send (requires message_id) */
-  reaction: z.enum(MESSAGE_REACTIONS).optional(),
-  /** Timeout in seconds (minimum 5 seconds) */
-  timeout: z.number().min(5, "Timeout must be at least 5 seconds").optional(),
-  /** Message service type (default: 'imessage') */
-  service: z.enum(SERVICES).optional(),
-  /** HTTPS URL for webhook status updates */
-  status_callback: z.string().url().startsWith("https://", "Status callback must be HTTPS URL").optional(),
-  /** Custom header for webhook requests */
-  status_callback_header: z.string().optional(),
-  /** Custom metadata (max 1,000 chars, included in webhooks) */
-  passthrough: z.string().max(1000, "Passthrough must be less than 1,000 characters").optional(),
-}).refine(
-  (data) => data.recipient || data.group,
-  {
+export const SendMessageParamsSchema = z
+  .object({
+    /** Phone number (with country code) or email for individual message */
+    recipient: z.string().optional(),
+    /** Group ID for group message (mutually exclusive with recipient) */
+    group: z.string().optional(),
+    /** Message text content (required, max 10,000 characters) */
+    text: z.string().max(10000, "Text must be less than 10,000 characters"),
+    /** Array of public HTTPS image URLs (max 3 attachments) */
+    attachments: z
+      .array(
+        z
+          .string()
+          .url()
+          .startsWith("https://", "Attachments must be HTTPS URLs"),
+      )
+      .max(3, "Maximum 3 attachments allowed")
+      .optional(),
+    /** Subject line - displays as bold title before message text */
+    subject: z.string().optional(),
+    /** Visual effect for message delivery (iMessage only) */
+    effect: z.enum(MESSAGE_EFFECTS).optional(),
+    /** Message ID to reply to (creates threaded reply) */
+    reply_to_id: z.string().optional(),
+    /** Message ID to react to (required for reactions) */
+    message_id: z.string().optional(),
+    /** Type of reaction to send (requires message_id) */
+    reaction: z.enum(MESSAGE_REACTIONS).optional(),
+    /** Timeout in seconds (minimum 5 seconds) */
+    timeout: z.number().min(5, "Timeout must be at least 5 seconds").optional(),
+    /** Message service type (default: 'imessage') */
+    service: z.enum(SERVICES).optional(),
+    /** HTTPS URL for webhook status updates */
+    status_callback: z
+      .string()
+      .url()
+      .startsWith("https://", "Status callback must be HTTPS URL")
+      .optional(),
+    /** Custom header for webhook requests */
+    status_callback_header: z.string().optional(),
+    /** Custom metadata (max 1,000 chars, included in webhooks) */
+    passthrough: z
+      .string()
+      .max(1000, "Passthrough must be less than 1,000 characters")
+      .optional(),
+  })
+  .refine((data) => data.recipient || data.group, {
     message: "Either recipient or group must be specified",
     path: ["recipient"],
-  }
-).refine(
-  (data) => !(data.recipient && data.group),
-  {
+  })
+  .refine((data) => !(data.recipient && data.group), {
     message: "Cannot specify both recipient and group",
     path: ["group"],
-  }
-);
+  });
 
 /**
  * Response from LoopMessage API
@@ -75,11 +87,13 @@ export const LoopMessageResponseSchema = z.object({
   message_id: z.string(),
   success: z.boolean(),
   recipient: z.string().optional(),
-  group: z.object({
-    group_id: z.string(),
-    name: z.string().optional(),
-    participants: z.array(z.string()),
-  }).optional(),
+  group: z
+    .object({
+      group_id: z.string(),
+      name: z.string().optional(),
+      participants: z.array(z.string()),
+    })
+    .optional(),
   text: z.string(),
   message: z.string().optional(),
 });
@@ -106,7 +120,9 @@ export class LoopMessageClient {
   ): Promise<LoopMessageResponse> {
     // Validate parameters
     const fullParams = { ...params, sender_name: this.config.senderName };
-    SendMessageParamsSchema.safeExtend({ sender_name: z.string() }).parse(fullParams);
+    SendMessageParamsSchema.safeExtend({ sender_name: z.string() }).parse(
+      fullParams,
+    );
 
     return this.sendRequest(fullParams);
   }
