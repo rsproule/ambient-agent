@@ -70,12 +70,26 @@ export const handleMessageResponse = task({
         }
 
         try {
-          await executeAction(action, payload);
+          // Execute action and get LoopMessage ID + attachments
+          const result = await executeAction(action, payload);
           results.push({ index: i, type: action.type, success: true });
 
-          // Only save successful messages to the database
+          // Save successful actions to the database with messageId for delivery tracking
           if (action.type === "message") {
-            await saveAssistantMessage(payload.conversationId, action.text);
+            await saveAssistantMessage(
+              payload.conversationId,
+              action.text,
+              result.messageId,
+              result.attachments,
+            );
+          } else if (action.type === "reaction") {
+            // Save reactions with a special format
+            const reactionContent = `[REACTION: ${action.reaction} on msg_id: ${action.message_id}]`;
+            await saveAssistantMessage(
+              payload.conversationId,
+              reactionContent,
+              result.messageId,
+            );
           }
         } catch (error) {
           const errorMsg =
@@ -140,10 +154,15 @@ function filterValidAttachments(attachments?: string[]): string[] | undefined {
   return valid.length > 0 ? valid : undefined;
 }
 
+interface ExecuteActionResult {
+  messageId: string | undefined;
+  attachments?: string[];
+}
+
 async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
-) {
+): Promise<ExecuteActionResult> {
   // Validate we have a recipient or group
   if (!payload.group && !payload.recipient) {
     throw new Error(
@@ -168,8 +187,9 @@ async function executeAction(
       const validAttachments = filterValidAttachments(action.attachments);
 
       // Use appropriate method based on what's being sent
+      let response;
       if (action.reply_to_id) {
-        await client.sendReply({
+        response = await client.sendReply({
           ...baseParams,
           text: action.text,
           reply_to_id: action.reply_to_id,
@@ -178,7 +198,7 @@ async function executeAction(
           subject: action.subject,
         });
       } else if (action.effect) {
-        await client.sendMessageWithEffect({
+        response = await client.sendMessageWithEffect({
           ...baseParams,
           text: action.text,
           effect: action.effect,
@@ -186,22 +206,22 @@ async function executeAction(
           subject: action.subject,
         });
       } else {
-        await client.sendLoopMessage({
+        response = await client.sendLoopMessage({
           ...baseParams,
           text: action.text,
           ...(validAttachments && { attachments: validAttachments }),
           subject: action.subject,
         });
       }
-      break;
+      return { messageId: response.message_id, attachments: validAttachments };
 
     case "reaction":
-      await client.sendReaction({
+      const reactionResponse = await client.sendReaction({
         ...baseParams,
         text: "Reaction", // Required by SDK validation but ignored by API for reactions
         message_id: action.message_id,
         reaction: action.reaction,
       });
-      break;
+      return { messageId: reactionResponse.message_id };
   }
 }

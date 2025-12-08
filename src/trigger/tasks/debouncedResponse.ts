@@ -5,10 +5,11 @@ import {
   getConversationMessages,
   isCurrentGeneration,
   releaseResponseLock,
+  saveAssistantMessage,
 } from "@/src/db/conversation";
 import { createContextLogger } from "@/src/lib/logger";
-import { task, wait } from "@trigger.dev/sdk/v3";
 import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
+import { task, wait } from "@trigger.dev/sdk/v3";
 import { handleMessageResponse } from "./handleMessage";
 
 // Create LoopMessage client for sending quick notifications
@@ -184,10 +185,17 @@ export const debouncedResponse = task({
             ? { group: payload.group }
             : { recipient: payload.recipient! };
 
-          await loopClient.sendLoopMessage({
+          const response = await loopClient.sendLoopMessage({
             ...baseParams,
             text: loadingMessage,
           });
+
+          // Save the tool notification message to the database
+          await saveAssistantMessage(
+            payload.conversationId,
+            loadingMessage,
+            response.message_id,
+          );
         } catch (err) {
           log.error("Failed to send tool notification", { error: err });
         }

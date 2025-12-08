@@ -32,20 +32,31 @@ model Conversation {
   @@index([lastMessageAt])
 }
 
+enum DeliveryStatus {
+  pending
+  scheduled
+  sent
+  failed
+  timeout
+}
+
 model Message {
-  id              String       @id @default(cuid())
+  id              String          @id @default(cuid())
   conversationId  String
-  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation    Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   role            String // "user", "assistant", or "system"
   content         Json // Support both string and structured content (for tool calls)
   sender          String? // phone number for user messages or source for system messages
   messageId       String? // LoopMessage message_id
   attachments     String[] // Array of attachment URLs
   forwarded       Boolean? // For system messages: whether it was forwarded to the user
-  rejectionReason String?      @db.Text // For system messages: why it wasn't forwarded (if applicable)
-  createdAt       DateTime     @default(now())
+  rejectionReason String?         @db.Text // For system messages: why it wasn't forwarded (if applicable)
+  deliveryStatus  DeliveryStatus? // For assistant messages: pending -> sent/failed/timeout
+  deliveryError   String? // Error message if delivery failed
+  createdAt       DateTime        @default(now())
 
   @@index([conversationId, createdAt])
+  @@index([messageId])
 }
 
 model User {
@@ -55,6 +66,7 @@ model User {
   email                  String?        @unique // Optional email
   emailVerified          DateTime? // For NextAuth
   image                  String? // Profile image URL
+  isAdmin                Boolean        @default(false) // Admin access for admin routes
   outboundOptIn          Boolean? // null = not asked, true = opted in, false = opted out
   hasCompletedOnboarding Boolean        @default(false) // Whether user has completed the onboarding flow
   connections            Connection[] // User's connected accounts

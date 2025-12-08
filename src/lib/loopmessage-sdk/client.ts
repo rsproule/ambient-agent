@@ -8,6 +8,7 @@ import {
   API_ENDPOINTS,
   MESSAGE_EFFECTS,
   MESSAGE_REACTIONS,
+  MESSAGE_STATUSES,
   SERVICES,
   type MessageEffect,
   type MessageReaction,
@@ -33,12 +34,13 @@ export const SendMessageParamsSchema = z
     group: z.string().optional(),
     /** Message text content (required, max 10,000 characters) */
     text: z.string().max(10000, "Text must be less than 10,000 characters"),
-    /** Array of public HTTPS image URLs (max 3 attachments) */
+    /** Array of public HTTPS image URLs (max 3 attachments, 256 chars each) */
     attachments: z
       .array(
         z
           .string()
           .url()
+          .max(256, "Attachment URL must be 256 characters or less")
           .startsWith("https://", "Attachments must be HTTPS URLs"),
       )
       .max(3, "Maximum 3 attachments allowed")
@@ -98,10 +100,26 @@ export const LoopMessageResponseSchema = z.object({
   message: z.string().optional(),
 });
 
+/**
+ * Response from LoopMessage Message Status API
+ */
+export const MessageStatusResponseSchema = z.object({
+  message_id: z.string(),
+  status: z.enum(MESSAGE_STATUSES),
+  recipient: z.string(),
+  text: z.string(),
+  sandbox: z.boolean().optional(),
+  error_code: z.number().optional(),
+  sender_name: z.string().optional(),
+  passthrough: z.string().optional(),
+  last_update: z.string().optional(),
+});
+
 // Export inferred types for backward compatibility
 export type LoopMessageConfig = z.infer<typeof LoopMessageConfigSchema>;
 export type SendMessageParams = z.infer<typeof SendMessageParamsSchema>;
 export type LoopMessageResponse = z.infer<typeof LoopMessageResponseSchema>;
+export type MessageStatusResponse = z.infer<typeof MessageStatusResponseSchema>;
 
 /**
  * LoopMessage API Client
@@ -118,13 +136,10 @@ export class LoopMessageClient {
   async sendLoopMessage(
     params: Omit<SendMessageParams, "sender_name">,
   ): Promise<LoopMessageResponse> {
-    // Validate parameters
-    const fullParams = { ...params, sender_name: this.config.senderName };
-    SendMessageParamsSchema.safeExtend({ sender_name: z.string() }).parse(
-      fullParams,
-    );
-
-    return this.sendRequest(fullParams);
+    return this.sendRequest({
+      ...params,
+      sender_name: this.config.senderName,
+    });
   }
 
   /**
@@ -167,6 +182,54 @@ export class LoopMessageClient {
   }
 
   /**
+   * Get the status of a message by its ID
+   * https://docs.loopmessage.com/imessage-conversation-api/statuses
+   */
+  async getMessageStatus(messageId: string): Promise<MessageStatusResponse> {
+    const url = `${API_ENDPOINTS.BASE_URL}${API_ENDPOINTS.MESSAGE_STATUS}${messageId}/`;
+
+    console.log(`[LoopMessage] Checking status for message ${messageId}`);
+
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: this.config.loopAuthKey,
+        "Loop-Secret-Key": this.config.loopSecretKey,
+      },
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+
+      console.error("LOOPMESSAGE STATUS API REQUEST FAILED", {
+        status: response.status,
+        statusText: response.statusText,
+        error: errorText,
+        messageId,
+      });
+
+      if (response.status === 404) {
+        throw new Error(`Message not found: ${messageId}`);
+      }
+
+      throw new Error(
+        `LoopMessage Status API error (${response.status}): ${errorText}`,
+      );
+    }
+
+    const result = await response.json();
+
+    // Validate response structure
+    const validatedResult = MessageStatusResponseSchema.parse(result);
+
+    console.log(
+      `[LoopMessage] Message ${messageId} status: ${validatedResult.status}`,
+    );
+
+    return validatedResult;
+  }
+
+  /**
    * Make the actual HTTP request to LoopMessage API
    */
   private async sendRequest(
@@ -177,6 +240,21 @@ export class LoopMessageClient {
       throw new Error("Either recipient or group must be specified");
     }
     const recipient = params.recipient || params.group;
+
+    // Determine message type for logging
+    const messageType = params.reaction
+      ? "reaction"
+      : params.reply_to_id
+      ? "reply"
+      : params.effect
+      ? "effect"
+      : "message";
+
+    console.log(`[LoopMessage] Sending ${messageType} to ${recipient}`, {
+      hasAttachments: !!params.attachments?.length,
+      ...(params.effect && { effect: params.effect }),
+      ...(params.reaction && { reaction: params.reaction }),
+    });
 
     const response = await fetch(url, {
       method: "POST",

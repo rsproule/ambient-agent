@@ -67,7 +67,23 @@ export type ServiceType = (typeof SERVICES)[number];
 export const API_ENDPOINTS = {
   BASE_URL: "https://server.loopmessage.com/api/v1",
   SEND_MESSAGE: "/message/send/",
+  MESSAGE_STATUS: "/message/status/",
 } as const;
+
+/**
+ * Message delivery statuses from the status API
+ * https://docs.loopmessage.com/imessage-conversation-api/statuses
+ */
+export const MESSAGE_STATUSES = [
+  "processing",
+  "scheduled",
+  "failed",
+  "sent",
+  "timeout",
+  "unknown",
+] as const;
+
+export type MessageStatus = (typeof MESSAGE_STATUSES)[number];
 
 /**
  * Send Message API error codes
