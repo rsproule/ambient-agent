@@ -176,6 +176,8 @@ export async function saveAssistantMessage(
       content: content as Prisma.InputJsonValue,
       messageId,
       attachments: [], // Assistant messages can have attachments too
+      // Set delivery status to pending if we have a messageId (means we're sending via LoopMessage)
+      deliveryStatus: messageId ? "pending" : undefined,
     },
   });
 
@@ -861,4 +863,55 @@ export async function isCurrentGeneration(
   }
 
   return conversation.activeResponseTaskId === taskId;
+}
+
+/**
+ * Update the delivery status of a message by its LoopMessage message_id
+ */
+export async function updateMessageDeliveryStatus(
+  loopMessageId: string,
+  status: "pending" | "scheduled" | "sent" | "failed" | "timeout",
+  error?: string,
+): Promise<boolean> {
+  try {
+    // Find messages with this LoopMessage ID (could be multiple if retried)
+    const messages = await prisma.message.findMany({
+      where: { messageId: loopMessageId },
+    });
+
+    if (messages.length === 0) {
+      logger.warn("No message found for delivery status update", {
+        component: "updateMessageDeliveryStatus",
+        loopMessageId,
+        status,
+      });
+      return false;
+    }
+
+    // Update all matching messages (usually just one)
+    await prisma.message.updateMany({
+      where: { messageId: loopMessageId },
+      data: {
+        deliveryStatus: status,
+        deliveryError: error || null,
+      },
+    });
+
+    logger.debug("Updated message delivery status", {
+      component: "updateMessageDeliveryStatus",
+      loopMessageId,
+      status,
+      messageCount: messages.length,
+    });
+
+    return true;
+  } catch (err) {
+    logger.error("Failed to update message delivery status", {
+      component: "updateMessageDeliveryStatus",
+      loopMessageId,
+      status,
+      error: err,
+    });
+    return false;
+  }
 }
