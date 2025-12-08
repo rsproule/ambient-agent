@@ -64,19 +64,19 @@ export async function POST(request: Request) {
         });
       case "message_failed":
         handleMessageFailed(webhook);
-        return NextResponse.json({ status: 200 });
+        return NextResponse.json({ read: true }, { status: 200 });
       case "message_sent":
         handleMessageSent(webhook);
-        return NextResponse.json({ status: 200 });
+        return NextResponse.json({ read: true }, { status: 200 });
       case "message_timeout":
         handleMessageTimeout(webhook);
-        return NextResponse.json({ status: 200 });
+        return NextResponse.json({ read: true }, { status: 200 });
       default:
         log.info("Unhandled webhook type", { alert_type: webhook.alert_type });
         break;
     }
 
-    return NextResponse.json({ status: 200 });
+    return NextResponse.json({ read: true }, { status: 200 });
   } catch (error) {
     // Handle Zod validation errors specially
     if (error instanceof Error && error.name === "ZodError") {
@@ -272,9 +272,7 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
   });
 
   log.error(`MESSAGE DELIVERY FAILED: ${errorDescription}`, {
-    error_code: webhook.error_code,
-    recipient: webhook.recipient,
-    message_id: webhook.message_id,
+    webhook,
   });
 }
 
