@@ -202,7 +202,10 @@ export class LoopMessageClient {
 
       // Provide specific guidance based on status code
       if (response.status === 400) {
-        console.error("BAD REQUEST - The send request is malformed", {});
+        console.error("BAD REQUEST - The send request is malformed", {
+          params,
+          errorText,
+        });
       } else if (response.status === 401) {
         console.error("UNAUTHORIZED - Invalid API credentials", {
           suggestion:

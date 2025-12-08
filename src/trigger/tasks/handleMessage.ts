@@ -29,6 +29,14 @@ export const handleMessageResponse = task({
     preset: "small-1x", // 0.5 vCPU, 0.5 GB RAM
   },
   run: async (payload: HandleMessageResponsePayload) => {
+    // Track results for each action
+    const results: Array<{
+      index: number;
+      type: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
     try {
       // Execute each action in sequence
       for (let i = 0; i < payload.actions.length; i++) {
@@ -49,8 +57,9 @@ export const handleMessageResponse = task({
             );
             return {
               interrupted: true,
-              actionsCompleted: i,
+              actionsCompleted: results.filter((r) => r.success).length,
               totalActions: payload.actions.length,
+              results,
             };
           }
         }
@@ -60,17 +69,37 @@ export const handleMessageResponse = task({
           await wait.for({ seconds: action.delay / 1000 });
         }
 
-        await executeAction(action, payload);
+        try {
+          await executeAction(action, payload);
+          results.push({ index: i, type: action.type, success: true });
 
-        // Save assistant messages to the database
-        if (action.type === "message") {
-          await saveAssistantMessage(payload.conversationId, action.text);
+          // Only save successful messages to the database
+          if (action.type === "message") {
+            await saveAssistantMessage(payload.conversationId, action.text);
+          }
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `[handleMessage] Action ${i} (${action.type}) failed for ${payload.conversationId}, continuing:`,
+            errorMsg,
+          );
+          results.push({
+            index: i,
+            type: action.type,
+            success: false,
+            error: errorMsg,
+          });
+          // Continue to next action - don't block on LLM-generated bad actions
         }
       }
 
+      const successCount = results.filter((r) => r.success).length;
       return {
-        success: true,
-        actionsCompleted: payload.actions.length,
+        success: successCount > 0, // At least one action worked
+        actionsCompleted: successCount,
+        totalActions: payload.actions.length,
+        results,
       };
     } finally {
       // Always release the lock when done (success or failure)
