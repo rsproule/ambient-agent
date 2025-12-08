@@ -167,8 +167,6 @@ function AdminChatsContent() {
             showContext={showContext}
             onToggleContext={() => setShowContext(!showContext)}
             onMessageClick={setSelectedMessage}
-            onDeleteMessage={(id) => deleteMutation.mutate(id)}
-            isDeleting={deleteMutation.isPending}
             onRetryMessage={(id) => retryMutation.mutate(id)}
             isRetrying={retryMutation.isPending}
             messageInput={messageInput}
