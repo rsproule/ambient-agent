@@ -1,4 +1,8 @@
-import { saveReactionMessage, saveUserMessage } from "@/src/db/conversation";
+import {
+  saveReactionMessage,
+  saveUserMessage,
+  updateMessageDeliveryStatus,
+} from "@/src/db/conversation";
 import { upsertUser, upsertUsers } from "@/src/db/user";
 import logger, { createContextLogger } from "@/src/lib/logger";
 import {
@@ -6,6 +10,7 @@ import {
   type MessageFailedWebhook,
   type MessageInboundWebhook,
   type MessageReactionWebhook,
+  type MessageScheduledWebhook,
   type MessageSentWebhook,
   type MessageTimeoutWebhook,
 } from "@/src/lib/loopmessage-sdk/webhooks";
@@ -62,14 +67,17 @@ export async function POST(request: Request) {
         return NextResponse.json(await inboundReactionHandler(webhook), {
           status: 200,
         });
+      case "message_scheduled":
+        await handleMessageScheduled(webhook);
+        return NextResponse.json({ read: true }, { status: 200 });
       case "message_failed":
-        handleMessageFailed(webhook);
+        await handleMessageFailed(webhook);
         return NextResponse.json({ read: true }, { status: 200 });
       case "message_sent":
-        handleMessageSent(webhook);
+        await handleMessageSent(webhook);
         return NextResponse.json({ read: true }, { status: 200 });
       case "message_timeout":
-        handleMessageTimeout(webhook);
+        await handleMessageTimeout(webhook);
         return NextResponse.json({ read: true }, { status: 200 });
       default:
         log.info("Unhandled webhook type", { alert_type: webhook.alert_type });
@@ -254,6 +262,27 @@ async function inboundReactionHandler(
 }
 
 /**
+ * Handle message_scheduled webhook - message has been queued for delivery
+ */
+async function handleMessageScheduled(
+  webhook: MessageScheduledWebhook,
+): Promise<void> {
+  const log = createContextLogger({
+    component: "loopmessage-delivery-scheduled",
+    msgId: webhook.message_id,
+    sender: webhook.recipient,
+  });
+
+  log.info("Message scheduled for delivery", {
+    recipient: webhook.recipient,
+    message_id: webhook.message_id,
+  });
+
+  // Update message delivery status to scheduled
+  await updateMessageDeliveryStatus(webhook.message_id, "scheduled");
+}
+
+/**
  * Handle message_failed webhook - message could not be delivered at all
  *
  * This happens when:
@@ -261,7 +290,9 @@ async function inboundReactionHandler(
  * - Invalid phone number or email
  * - Other delivery failures
  */
-function handleMessageFailed(webhook: MessageFailedWebhook): void {
+async function handleMessageFailed(
+  webhook: MessageFailedWebhook,
+): Promise<void> {
   const errorDescription =
     WEBHOOK_ERROR_CODES[webhook.error_code] || "Unknown error code";
 
@@ -274,12 +305,19 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
   log.error(`MESSAGE DELIVERY FAILED: ${errorDescription}`, {
     webhook,
   });
+
+  // Update message delivery status in database
+  await updateMessageDeliveryStatus(
+    webhook.message_id,
+    "failed",
+    `Error ${webhook.error_code}: ${errorDescription}`,
+  );
 }
 
 /**
  * Handle message_sent webhook - check if delivery actually succeeded
  */
-function handleMessageSent(webhook: MessageSentWebhook): void {
+async function handleMessageSent(webhook: MessageSentWebhook): Promise<void> {
   const log = createContextLogger({
     component: "loopmessage-delivery",
     msgId: webhook.message_id,
@@ -296,6 +334,13 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
       message_id: webhook.message_id,
       reaction: webhook.reaction,
     });
+
+    // Update message delivery status to failed
+    await updateMessageDeliveryStatus(
+      webhook.message_id,
+      "failed",
+      "Message sent but delivery failed",
+    );
   } else {
     log.info(isReaction ? "Reaction sent" : "Message delivered", {
       success: webhook.success,
@@ -305,6 +350,9 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
       reaction: webhook.reaction,
       reaction_event: webhook.reaction_event,
     });
+
+    // Update message delivery status to sent
+    await updateMessageDeliveryStatus(webhook.message_id, "sent");
   }
 }
 
@@ -315,7 +363,9 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
  * - A timeout parameter was passed in the send request
  * - The message could not be delivered within that time
  */
-function handleMessageTimeout(webhook: MessageTimeoutWebhook): void {
+async function handleMessageTimeout(
+  webhook: MessageTimeoutWebhook,
+): Promise<void> {
   const errorDescription =
     WEBHOOK_ERROR_CODES[webhook.error_code] || "Timeout error";
 
@@ -349,5 +399,12 @@ function handleMessageTimeout(webhook: MessageTimeoutWebhook): void {
       suggestion:
         "Consider increasing timeout value or implementing retry logic",
     },
+  );
+
+  // Update message delivery status to timeout
+  await updateMessageDeliveryStatus(
+    webhook.message_id,
+    "timeout",
+    `Error ${webhook.error_code}: ${errorDescription}`,
   );
 }

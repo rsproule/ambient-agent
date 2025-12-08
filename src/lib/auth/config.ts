@@ -34,6 +34,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           email: result.user.email,
           phoneNumber: result.user.phoneNumber,
           image: result.user.image,
+          isAdmin: result.user.isAdmin,
         };
       },
     }),
@@ -44,6 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (user) {
         token.id = user.id;
         token.phoneNumber = user.phoneNumber;
+        token.isAdmin = user.isAdmin;
         // Store when the token was created
         token.iat = Math.floor(Date.now() / 1000);
       }
@@ -60,6 +62,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user) {
         session.user.id = token.id as string;
         session.user.phoneNumber = token.phoneNumber as string | undefined;
+        session.user.isAdmin = token.isAdmin as boolean | undefined;
       }
       return session;
     },

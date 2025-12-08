@@ -21,6 +21,7 @@ export interface ValidateTokenResult {
     name?: string;
     email?: string;
     image?: string;
+    isAdmin?: boolean;
   };
   error?: string;
 }
@@ -126,6 +127,7 @@ export async function validateMagicLinkToken(
         name: true,
         email: true,
         image: true,
+        isAdmin: true,
       },
     });
 
@@ -149,6 +151,7 @@ export async function validateMagicLinkToken(
         name: user.name ?? undefined,
         email: user.email ?? undefined,
         image: user.image ?? undefined,
+        isAdmin: user.isAdmin ?? undefined,
       },
     };
   } catch (error) {
