@@ -1,13 +1,13 @@
-import { type MessageAction } from "@/src/ai/respondToMessage";
 import {
+  isCurrentGeneration,
   releaseResponseLock,
   saveAssistantMessage,
-  shouldInterrupt,
 } from "@/src/db/conversation";
+import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
+import { type MessageAction } from "@/src/lib/loopmessage-sdk/message-actions";
 import { task, wait } from "@trigger.dev/sdk/v3";
-import { LoopMessageService } from "loopmessage-sdk";
 
-const client = new LoopMessageService({
+const client = new LoopMessageClient({
   loopAuthKey: process.env.LOOP_AUTH_KEY!,
   loopSecretKey: process.env.LOOP_SECRET_KEY!,
   senderName: process.env.LOOP_SENDER_NAME!,
@@ -37,13 +37,13 @@ export const handleMessageResponse = task({
         // Check for interrupt before each action (except the first)
         // Note: Group chats with per-sender locking don't use interrupts
         if (i > 0) {
-          const interrupted = await shouldInterrupt(
+          const isCurrent = await isCurrentGeneration(
             payload.conversationId,
             payload.taskId,
             payload.sender,
             payload.isGroup,
           );
-          if (interrupted) {
+          if (!isCurrent) {
             console.log(
               `Response interrupted for conversation ${payload.conversationId}, stopping at action ${i}/${payload.actions.length}`,
             );
@@ -92,7 +92,7 @@ export const handleMessageResponse = task({
  */
 function filterValidAttachments(attachments?: string[]): string[] | undefined {
   if (!attachments || attachments.length === 0) return undefined;
-  
+
   const valid = attachments
     .filter((url) => {
       if (!url || typeof url !== "string") return false;
@@ -107,7 +107,7 @@ function filterValidAttachments(attachments?: string[]): string[] | undefined {
       return true;
     })
     .slice(0, 3); // Max 3 attachments
-  
+
   return valid.length > 0 ? valid : undefined;
 }
 
@@ -130,13 +130,14 @@ async function executeAction(
   console.log(
     `Executing ${action.type} action for conversation ${payload.conversationId}`,
     baseParams,
+    action,
   );
 
   switch (action.type) {
     case "message":
       // Filter attachments to only valid HTTPS URLs
       const validAttachments = filterValidAttachments(action.attachments);
-      
+
       // Use appropriate method based on what's being sent
       if (action.reply_to_id) {
         await client.sendReply({

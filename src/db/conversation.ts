@@ -543,7 +543,8 @@ export async function getConversationMessages(
       userContext,
       systemState,
       groupParticipants,
-      recentAttachments: recentAttachments.length > 0 ? recentAttachments : undefined,
+      recentAttachments:
+        recentAttachments.length > 0 ? recentAttachments : undefined,
       groupChatCustomPrompt,
     },
   };
@@ -616,7 +617,7 @@ function extractAssistantAttachments(content: unknown): string[] {
         (action): action is { type: string; attachments?: string[] } =>
           typeof action === "object" &&
           action !== null &&
-          (action as { type?: string }).type === "message"
+          (action as { type?: string }).type === "message",
       )
       .flatMap((action) => action.attachments || []);
   } catch {
@@ -638,7 +639,7 @@ function isSupportedImageFormat(url: string): boolean {
     const urlLower = url.toLowerCase();
     // Check file extension
     const hasExtension = SUPPORTED_IMAGE_EXTENSIONS.some((ext) =>
-      urlLower.includes(ext)
+      urlLower.includes(ext),
     );
     if (hasExtension) return true;
 
@@ -688,7 +689,7 @@ function buildMessageContent(msg: {
   // Separate supported images from unsupported attachments
   const supportedImages = msg.attachments.filter(isSupportedImageFormat);
   const unsupportedAttachments = msg.attachments.filter(
-    (url) => !isSupportedImageFormat(url)
+    (url) => !isSupportedImageFormat(url),
   );
 
   // Multi-part message with attachments
@@ -801,9 +802,6 @@ export async function acquireResponseLock(
   return true;
 }
 
-/**
- * Release the response lock for a conversation
- */
 export async function releaseResponseLock(
   conversationId: string,
   taskId: string,
@@ -863,20 +861,4 @@ export async function isCurrentGeneration(
   }
 
   return conversation.activeResponseTaskId === taskId;
-}
-
-/**
- * @deprecated Use isCurrentGeneration() polling instead
- */
-export async function shouldInterrupt(
-  conversationId: string,
-  taskId: string,
-  sender?: string,
-  isGroup?: boolean,
-): Promise<boolean> {
-  if (isGroup && sender) {
-    return false;
-  }
-  const isCurrent = await isCurrentGeneration(conversationId, taskId, sender, isGroup);
-  return !isCurrent;
 }

@@ -105,8 +105,17 @@ CAPABILITY HONESTY:
 Reactions (Tapbacks):
 - Incoming reactions appear as: [REACTION: {type} on msg_id: {id}]
 - Example: "[REACTION: question on msg_id: ABC-123]"
-- Types: love, like, dislike, laugh, exclaim, question
-- DO NOT respond to most reactions - just return [] unless they obviously indicate some follow up is needed.
+- Valid reaction types (use ONLY these exact values):
+  • love (user might say: heart, ❤️)
+  • like (user might say: thumbs up, 👍)
+  • dislike (user might say: thumbs down, 👎)
+  • laugh (user might say: haha, lol, 😂)
+  • exclaim (user might say: emphasize, emphasis, !!, ❗)
+  • question (user might say: ?, ??)
+- To remove a reaction, prefix with -: -love, -like, -dislike, -laugh, -exclaim, -question
+- DO NOT respond to most incoming reactions - just return [] unless they obviously indicate follow up is needed.
+- When USER asks you to react to a message, extract the msg_id from that message and use the reaction action.
+- NEVER send reaction requests as text messages - always use the reaction action type.
 `.trim();
 
 /**
