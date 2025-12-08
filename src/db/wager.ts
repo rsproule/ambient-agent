@@ -215,8 +215,14 @@ export async function placePosition(
     throw new Error("Failed to get updated wager");
   }
 
+  // Find the updated position (matchedAmount may have changed after matching)
+  const updatedPosition = updatedWager.positions.find((p) => p.id === position.id);
+  if (!updatedPosition) {
+    throw new Error("Failed to find updated position");
+  }
+
   return {
-    position: formatPosition(position),
+    position: updatedPosition,
     wager: updatedWager,
   };
 }
