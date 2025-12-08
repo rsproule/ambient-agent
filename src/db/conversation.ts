@@ -570,11 +570,14 @@ function formatMessageForAI(
   // If it's not a string, that's a data integrity issue - log and recover
   if (msg.role === "assistant") {
     if (typeof msg.content !== "string") {
-      logger.error("DATA INTEGRITY: Assistant message content is not a string", {
-        component: "formatMessageForAI",
-        contentType: typeof msg.content,
-        content: JSON.stringify(msg.content)?.slice(0, 200),
-      });
+      logger.error(
+        "DATA INTEGRITY: Assistant message content is not a string",
+        {
+          component: "formatMessageForAI",
+          contentType: typeof msg.content,
+          content: JSON.stringify(msg.content)?.slice(0, 200),
+        },
+      );
       // Recovery: stringify whatever is there
       const recovered =
         msg.content === null || msg.content === undefined
