@@ -266,13 +266,13 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
     sender: webhook.recipient,
   });
 
-  log.error("🚨 MESSAGE DELIVERY FAILED 🚨", {
+  log.error("MESSAGE DELIVERY FAILED", {
     alert_type: "message_failed",
     error_code: webhook.error_code,
     error_description: errorDescription,
     recipient: webhook.recipient,
     message_id: webhook.message_id,
-    text_preview: webhook.text?.substring(0, 100),
+    text_preview: webhook.text,
     passthrough: webhook.passthrough,
     full_webhook: webhook,
   });
@@ -281,7 +281,7 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
   switch (webhook.error_code) {
     case 110:
       log.error(
-        "⚠️ INVALID RECIPIENT - This user cannot receive iMessages. They may be an Android user or have an invalid identifier.",
+        "INVALID RECIPIENT - This user cannot receive iMessages. They may be an Android user or have an invalid identifier.",
         {
           recipient: webhook.recipient,
           suggestion: "Consider SMS fallback or alternative contact method",
@@ -290,7 +290,7 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
       break;
     case 120:
       log.error(
-        "⚠️ MESSAGE BLOCKED - Recipient has blocked this sender or uses unknown sender filters",
+        "MESSAGE BLOCKED - Recipient has blocked this sender or uses unknown sender filters",
         {
           recipient: webhook.recipient,
           suggestion:
@@ -299,16 +299,13 @@ function handleMessageFailed(webhook: MessageFailedWebhook): void {
       );
       break;
     case 140:
-      log.error(
-        "⚠️ NETWORK ERROR - Temporary network issue prevented delivery",
-        {
-          recipient: webhook.recipient,
-          suggestion: "Message may be retried automatically",
-        },
-      );
+      log.error("NETWORK ERROR - Temporary network issue prevented delivery", {
+        recipient: webhook.recipient,
+        suggestion: "Message may be retried automatically",
+      });
       break;
     case 150:
-      log.error("⚠️ RATE LIMITED - Too many messages sent too quickly", {
+      log.error("RATE LIMITED - Too many messages sent too quickly", {
         recipient: webhook.recipient,
         suggestion: "Implement backoff or reduce message frequency",
       });
@@ -330,7 +327,7 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
   });
 
   if (webhook.success === false) {
-    log.error("🚨 MESSAGE SENT BUT NOT DELIVERED 🚨", {
+    log.error("MESSAGE SENT BUT NOT DELIVERED", {
       alert_type: "message_sent",
       success: false,
       delivery_type: webhook.delivery_type,
@@ -342,7 +339,7 @@ function handleMessageSent(webhook: MessageSentWebhook): void {
     });
 
     log.error(
-      "⚠️ DELIVERY FAILED ON RECIPIENT SIDE - Message was sent but recipient did not receive it",
+      "DELIVERY FAILED ON RECIPIENT SIDE - Message was sent but recipient did not receive it",
       {
         recipient: webhook.recipient,
         delivery_type: webhook.delivery_type,
@@ -385,7 +382,7 @@ function handleMessageTimeout(webhook: MessageTimeoutWebhook): void {
     sender: webhook.recipient,
   });
 
-  log.error("🚨 MESSAGE DELIVERY TIMED OUT 🚨", {
+  log.error("MESSAGE DELIVERY TIMED OUT", {
     alert_type: "message_timeout",
     error_code: webhook.error_code,
     error_description: errorDescription,
@@ -397,7 +394,7 @@ function handleMessageTimeout(webhook: MessageTimeoutWebhook): void {
   });
 
   log.error(
-    "⚠️ TIMEOUT - Failed to deliver message within the specified timeout period",
+    "TIMEOUT - Failed to deliver message within the specified timeout period",
     {
       recipient: webhook.recipient,
       possible_causes: [
