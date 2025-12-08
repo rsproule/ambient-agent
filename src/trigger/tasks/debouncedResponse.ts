@@ -8,8 +8,8 @@ import {
   saveAssistantMessage,
 } from "@/src/db/conversation";
 import { createContextLogger } from "@/src/lib/logger";
-import { task, wait } from "@trigger.dev/sdk/v3";
 import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
+import { task, wait } from "@trigger.dev/sdk/v3";
 import { handleMessageResponse } from "./handleMessage";
 
 // Create LoopMessage client for sending quick notifications
