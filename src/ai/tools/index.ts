@@ -10,6 +10,7 @@
  * - Create and manage scheduled jobs
  * - Configure group chat settings
  * - Record feature requests from users
+ * - Orchestrate wagers/bets in group chats
  *
  * Security: User-identity-sensitive tools are context-bound factories.
  * The phone number is taken from authenticated context, not user input,
@@ -25,6 +26,7 @@ export { createRequestFeatureTool } from "./requestFeature";
 export { createRequestResearchTool } from "./requestResearch";
 export { createUpdateUserContextTool } from "./updateUserContext";
 export { createScheduledJobTools } from "./scheduledJob";
+export { createWagerTools } from "./wager";
 
 // Static tools (no context needed - Claude can see images directly)
 export { createImageTool } from "./createImage";

@@ -184,6 +184,7 @@ export function buildConversationContextPrompt(context: {
   groupParticipants?: GroupParticipantInfo[] | null;
   sender?: string; // The authenticated sender (for group chats)
   groupChatCustomPrompt?: string | null; // Custom behavior prompt for this group chat
+  wageringEnabled?: boolean; // Whether wagering/betting is enabled for this group chat
 }): string {
   const parts: string[] = [];
 
@@ -225,6 +226,9 @@ export function buildConversationContextPrompt(context: {
     parts.push(
       "- GROUP CHAT ETIQUETTE: Do NOT spam. Respond in 1 message (max 2). Often a reaction is better than a message. You do NOT need to respond to everything.",
     );
+    if (context.wageringEnabled) {
+      parts.push("- Wagering/betting is enabled for this group chat. Use the relevant tools if participants are discussing bets or wagers.");
+    }
 
     // Custom group chat behavior (if configured)
     if (context.groupChatCustomPrompt) {

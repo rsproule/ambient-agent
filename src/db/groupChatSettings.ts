@@ -43,6 +43,40 @@ export async function setGroupChatCustomPrompt(
 }
 
 /**
+ * Get whether wagering is enabled for a group chat
+ * Returns false if no settings exist
+ */
+export async function getGroupChatWageringEnabled(
+  conversationId: string,
+): Promise<boolean> {
+  const settings = await prisma.groupChatSettings.findUnique({
+    where: { conversationId },
+    select: { wageringEnabled: true },
+  });
+
+  return settings?.wageringEnabled ?? false;
+}
+
+/**
+ * Set or update the wagering enabled flag for a group chat
+ */
+export async function setGroupChatWageringEnabled(
+  conversationId: string,
+  wageringEnabled: boolean,
+): Promise<void> {
+  await prisma.groupChatSettings.upsert({
+    where: { conversationId },
+    create: {
+      conversationId,
+      wageringEnabled,
+    },
+    update: {
+      wageringEnabled,
+    },
+  });
+}
+
+/**
  * Delete group chat settings (clears custom prompt)
  */
 export async function deleteGroupChatSettings(

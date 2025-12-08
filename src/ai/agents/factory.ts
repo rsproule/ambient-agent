@@ -17,6 +17,8 @@ export function defaultBuildContext(context: ConversationContext): string {
     systemState: context.systemState,
     groupParticipants: context.groupParticipants,
     sender: context.sender,
+    groupChatCustomPrompt: context.groupChatCustomPrompt,
+    wageringEnabled: context.wageringEnabled,
   });
 }
 
