@@ -8,7 +8,6 @@
  */
 
 import type { ConversationContext } from "@/src/db/conversation";
-import { getGroupChatWageringEnabled } from "@/src/db/groupChatSettings";
 import {
   createWager,
   placePosition,
@@ -32,14 +31,9 @@ import { z } from "zod";
  * Create context-bound wager tools
  * Only available in group chats
  */
-export async function createWagerTools(context: ConversationContext) {
-  // Wager tools are only available in group chats
-  if (!context.isGroup) {
-    return {};
-  }
-  
-  const wageringEnabled = await getGroupChatWageringEnabled(context.conversationId);
-  if (!wageringEnabled) {
+export function createWagerTools(context: ConversationContext) {
+  // Wager tools are only available in group chats with wagering enabled
+  if (!context.isGroup || !context.wageringEnabled) {
     return {};
   }
 

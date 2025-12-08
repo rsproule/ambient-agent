@@ -5,7 +5,10 @@ import type {
 } from "@/src/ai/agents/systemPrompt";
 import prisma from "@/src/db/client";
 import { getUserConnections } from "@/src/db/connection";
-import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
+import {
+  getGroupChatCustomPrompt,
+  getGroupChatWageringEnabled,
+} from "@/src/db/groupChatSettings";
 import { getUserContextByPhone, updateUserContext } from "@/src/db/userContext";
 import type { Prisma } from "@/src/generated/prisma";
 import { getUserTimezoneFromCalendar } from "@/src/lib/integrations/calendar";
@@ -66,6 +69,7 @@ export interface ConversationContext {
   groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
   recentAttachments?: string[]; // URLs of recent image attachments from the conversation (most recent first)
   groupChatCustomPrompt?: string | null; // Custom prompt for this group chat (injected into system prompt)
+  wageringEnabled?: boolean; // Whether wagering/betting is enabled for this group chat
 }
 
 /**
@@ -379,6 +383,7 @@ export async function getConversationMessages(
   let systemState: SystemState | null = null;
   let groupParticipants: GroupParticipantInfo[] | null = null;
   let groupChatCustomPrompt: string | null = null;
+  let wageringEnabled = false;
 
   // For group chats, look up participant identities and custom prompt
   if (conversation.isGroup && conversation.participants.length > 0) {
@@ -412,12 +417,15 @@ export async function getConversationMessages(
       );
     }
 
-    // Fetch group chat custom prompt
+    // Fetch group chat settings (custom prompt and wagering)
     try {
-      groupChatCustomPrompt = await getGroupChatCustomPrompt(conversationId);
+      [groupChatCustomPrompt, wageringEnabled] = await Promise.all([
+        getGroupChatCustomPrompt(conversationId),
+        getGroupChatWageringEnabled(conversationId),
+      ]);
     } catch (error) {
       console.warn(
-        `[getConversationMessages] Failed to fetch group chat custom prompt:`,
+        `[getConversationMessages] Failed to fetch group chat settings:`,
         error,
       );
     }
@@ -546,6 +554,7 @@ export async function getConversationMessages(
       recentAttachments:
         recentAttachments.length > 0 ? recentAttachments : undefined,
       groupChatCustomPrompt,
+      wageringEnabled,
     },
   };
 }
