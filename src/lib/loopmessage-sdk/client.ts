@@ -197,18 +197,12 @@ export class LoopMessageClient {
         statusText: response.statusText,
         error: errorText,
         recipient,
-        text_preview: params.text?.substring(0, 100),
-        has_attachments: !!params.attachments?.length,
-        has_effect: !!params.effect,
-        has_reaction: !!params.reaction,
+        params,
       });
 
       // Provide specific guidance based on status code
       if (response.status === 400) {
-        console.error("BAD REQUEST - The send request is malformed", {
-          suggestion:
-            "Check recipient format (E.164 phone or email), text length (<10k chars), attachment URLs (HTTPS, <256 chars)",
-        });
+        console.error("BAD REQUEST - The send request is malformed", {});
       } else if (response.status === 401) {
         console.error("UNAUTHORIZED - Invalid API credentials", {
           suggestion:
