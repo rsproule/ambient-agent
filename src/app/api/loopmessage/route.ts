@@ -1,11 +1,14 @@
 import { saveReactionMessage, saveUserMessage } from "@/src/db/conversation";
 import { upsertUser, upsertUsers } from "@/src/db/user";
 import logger, { createContextLogger } from "@/src/lib/logger";
-import type {
-  LoopWebhook,
-  MessageInboundWebhook,
-  MessageReactionWebhook,
-} from "@/src/lib/loopmessage-sdk/types";
+import {
+  LoopWebhookSchema,
+  type MessageFailedWebhook,
+  type MessageInboundWebhook,
+  type MessageReactionWebhook,
+  type MessageSentWebhook,
+  type MessageTimeoutWebhook,
+} from "@/src/lib/loopmessage-sdk/webhooks";
 import {
   isValidUserIdentifier,
   validateUserIdentifiers,
@@ -13,9 +16,25 @@ import {
 import { debouncedResponse } from "@/src/trigger/tasks/debouncedResponse";
 import { NextResponse } from "next/server";
 
+/**
+ * LoopMessage error codes and their meanings
+ * https://docs.loopmessage.com/webhooks
+ */
+const LOOPMESSAGE_ERROR_CODES: Record<number, string> = {
+  100: "Unknown error - An unexpected error occurred",
+  110: "Invalid recipient - The recipient phone number or email is invalid or cannot receive iMessages",
+  120: "Message blocked - The recipient has blocked you or uses filters for unknown senders",
+  130: "Timeout - Failed to deliver the message within the specified timeout period",
+  140: "Network error - A network issue prevented message delivery",
+  150: "Rate limited - Too many messages sent, please slow down",
+};
+
 export async function POST(request: Request) {
   try {
-    const webhook = (await request.json()) as LoopWebhook;
+    const rawWebhook = await request.json();
+
+    // Validate webhook structure with Zod
+    const webhook = LoopWebhookSchema.parse(rawWebhook);
 
     // Extract trace info for logging
     const msgId = webhook.message_id;
@@ -40,12 +59,37 @@ export async function POST(request: Request) {
         return NextResponse.json(await inboundReactionHandler(webhook), {
           status: 200,
         });
+      case "message_failed":
+        handleMessageFailed(webhook);
+        return NextResponse.json({ status: 200 });
+      case "message_sent":
+        handleMessageSent(webhook);
+        return NextResponse.json({ status: 200 });
+      case "message_timeout":
+        handleMessageTimeout(webhook);
+        return NextResponse.json({ status: 200 });
       default:
+        log.info("Unhandled webhook type", { alert_type: webhook.alert_type });
         break;
     }
 
     return NextResponse.json({ status: 200 });
   } catch (error) {
+    // Handle Zod validation errors specially
+    if (error instanceof Error && error.name === "ZodError") {
+      logger.error("Invalid webhook structure", {
+        error: error.message,
+        component: "loopmessage",
+      });
+      return NextResponse.json(
+        {
+          error: "Invalid webhook structure",
+          details: error.message,
+        },
+        { status: 400 },
+      );
+    }
+
     logger.error("Error processing webhook", {
       error,
       component: "loopmessage",
@@ -202,4 +246,168 @@ async function inboundReactionHandler(
   return {
     read: true,
   };
+}
+
+/**
+ * Handle message_failed webhook - message could not be delivered at all
+ *
+ * This happens when:
+ * - Recipient is an Android user (can't receive iMessage)
+ * - Invalid phone number or email
+ * - Other delivery failures
+ */
+function handleMessageFailed(webhook: MessageFailedWebhook): void {
+  const errorDescription =
+    LOOPMESSAGE_ERROR_CODES[webhook.error_code] || "Unknown error code";
+
+  const log = createContextLogger({
+    component: "loopmessage-delivery-failure",
+    msgId: webhook.message_id,
+    sender: webhook.recipient,
+  });
+
+  log.error("🚨 MESSAGE DELIVERY FAILED 🚨", {
+    alert_type: "message_failed",
+    error_code: webhook.error_code,
+    error_description: errorDescription,
+    recipient: webhook.recipient,
+    message_id: webhook.message_id,
+    text_preview: webhook.text?.substring(0, 100),
+    passthrough: webhook.passthrough,
+    full_webhook: webhook,
+  });
+
+  // Log additional context based on error code
+  switch (webhook.error_code) {
+    case 110:
+      log.error(
+        "⚠️ INVALID RECIPIENT - This user cannot receive iMessages. They may be an Android user or have an invalid identifier.",
+        {
+          recipient: webhook.recipient,
+          suggestion: "Consider SMS fallback or alternative contact method",
+        },
+      );
+      break;
+    case 120:
+      log.error(
+        "⚠️ MESSAGE BLOCKED - Recipient has blocked this sender or uses unknown sender filters",
+        {
+          recipient: webhook.recipient,
+          suggestion:
+            "User may need to add sender to contacts or disable filters",
+        },
+      );
+      break;
+    case 140:
+      log.error(
+        "⚠️ NETWORK ERROR - Temporary network issue prevented delivery",
+        {
+          recipient: webhook.recipient,
+          suggestion: "Message may be retried automatically",
+        },
+      );
+      break;
+    case 150:
+      log.error("⚠️ RATE LIMITED - Too many messages sent too quickly", {
+        recipient: webhook.recipient,
+        suggestion: "Implement backoff or reduce message frequency",
+      });
+      break;
+  }
+}
+
+/**
+ * Handle message_sent webhook - check if delivery actually succeeded
+ *
+ * success: true = delivered successfully
+ * success: false = sent but NOT delivered (e.g., recipient blocked you, unknown sender filter)
+ */
+function handleMessageSent(webhook: MessageSentWebhook): void {
+  const log = createContextLogger({
+    component: "loopmessage-delivery",
+    msgId: webhook.message_id,
+    sender: webhook.recipient,
+  });
+
+  if (webhook.success === false) {
+    log.error("🚨 MESSAGE SENT BUT NOT DELIVERED 🚨", {
+      alert_type: "message_sent",
+      success: false,
+      delivery_type: webhook.delivery_type,
+      recipient: webhook.recipient,
+      message_id: webhook.message_id,
+      text_preview: webhook.text?.substring(0, 100),
+      passthrough: webhook.passthrough,
+      full_webhook: webhook,
+    });
+
+    log.error(
+      "⚠️ DELIVERY FAILED ON RECIPIENT SIDE - Message was sent but recipient did not receive it",
+      {
+        recipient: webhook.recipient,
+        delivery_type: webhook.delivery_type,
+        possible_causes: [
+          "Recipient has blocked this sender",
+          "Recipient uses 'Filter Unknown Senders' setting",
+          "Message filtered to 'Unknown Senders' folder",
+          "iMessage delivery issue on recipient's device",
+        ],
+        suggestion:
+          "This is equivalent to 'Not Delivered' status in Messages app. User may need to add sender to contacts.",
+      },
+    );
+  } else {
+    // Success - just log at info level
+    log.info("Message delivered successfully", {
+      alert_type: "message_sent",
+      success: true,
+      delivery_type: webhook.delivery_type,
+      recipient: webhook.recipient,
+      message_id: webhook.message_id,
+    });
+  }
+}
+
+/**
+ * Handle message_timeout webhook - message delivery timed out
+ *
+ * This happens when:
+ * - A timeout parameter was passed in the send request
+ * - The message could not be delivered within that time
+ */
+function handleMessageTimeout(webhook: MessageTimeoutWebhook): void {
+  const errorDescription =
+    LOOPMESSAGE_ERROR_CODES[webhook.error_code] || "Timeout error";
+
+  const log = createContextLogger({
+    component: "loopmessage-delivery-timeout",
+    msgId: webhook.message_id,
+    sender: webhook.recipient,
+  });
+
+  log.error("🚨 MESSAGE DELIVERY TIMED OUT 🚨", {
+    alert_type: "message_timeout",
+    error_code: webhook.error_code,
+    error_description: errorDescription,
+    recipient: webhook.recipient,
+    message_id: webhook.message_id,
+    text_preview: webhook.text?.substring(0, 100),
+    passthrough: webhook.passthrough,
+    full_webhook: webhook,
+  });
+
+  log.error(
+    "⚠️ TIMEOUT - Failed to deliver message within the specified timeout period",
+    {
+      recipient: webhook.recipient,
+      possible_causes: [
+        "Recipient's device is offline",
+        "Poor network conditions",
+        "iMessage server delays",
+        "Timeout value was too short",
+      ],
+      suggestion:
+        "Consider increasing timeout value or implementing retry logic",
+    },
+  );
 }

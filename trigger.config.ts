@@ -1,3 +1,5 @@
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 import { defineConfig } from "@trigger.dev/sdk/v3";
 
@@ -22,6 +24,24 @@ export default defineConfig({
       prismaExtension({
         schema: "prisma/schema.prisma",
         mode: "legacy",
+      }),
+    ],
+  },
+  telemetry: {
+    exporters: [
+      new OTLPTraceExporter({
+        url: process.env.SIGNOZ_OTLP_ENDPOINT,
+        headers: {
+          "signoz-ingestion-key": process.env.SIGNOZ_INGESTION_KEY!,
+        },
+      }),
+    ],
+    logExporters: [
+      new OTLPLogExporter({
+        url: process.env.SIGNOZ_OTLP_ENDPOINT,
+        headers: {
+          "signoz-ingestion-key": process.env.SIGNOZ_INGESTION_KEY!,
+        },
       }),
     ],
   },

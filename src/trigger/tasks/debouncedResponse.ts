@@ -8,11 +8,11 @@ import {
 } from "@/src/db/conversation";
 import { createContextLogger } from "@/src/lib/logger";
 import { task, wait } from "@trigger.dev/sdk/v3";
-import { LoopMessageService } from "loopmessage-sdk";
+import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
 import { handleMessageResponse } from "./handleMessage";
 
 // Create LoopMessage client for sending quick notifications
-const loopClient = new LoopMessageService({
+const loopClient = new LoopMessageClient({
   loopAuthKey: process.env.LOOP_AUTH_KEY!,
   loopSecretKey: process.env.LOOP_SECRET_KEY!,
   senderName: process.env.LOOP_SENDER_NAME!,

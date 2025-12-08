@@ -1,6 +1,6 @@
 import { createImageTool } from "@/src/ai/tools";
 import { grokSearchTool } from "@/src/ai/tools/search";
-import { IMessageResponseSchema } from "@/src/lib/loopmessage-sdk/actions";
+import { IMessageResponseSchema } from "@/src/lib/loopmessage-sdk/message-actions";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createAgent } from "./factory";
 import { mrWhiskersPersonality } from "./personalities";
