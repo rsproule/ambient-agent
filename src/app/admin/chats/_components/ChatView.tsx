@@ -11,6 +11,7 @@ import {
   Loader2,
   PanelRightClose,
   PanelRightOpen,
+  RefreshCw,
   Send,
   Trash2,
 } from "lucide-react";
@@ -76,6 +77,8 @@ interface ChatViewProps {
   onMessageClick: (message: Message) => void;
   onDeleteMessage: (id: string) => void;
   isDeleting: boolean;
+  onRetryMessage: (id: string) => void;
+  isRetrying: boolean;
   messageInput: string;
   onMessageInputChange: (value: string) => void;
   onSendMessage: () => void;
@@ -92,6 +95,8 @@ export function ChatView({
   onMessageClick,
   onDeleteMessage,
   isDeleting,
+  onRetryMessage,
+  isRetrying,
   messageInput,
   onMessageInputChange,
   onSendMessage,
@@ -210,8 +215,48 @@ export function ChatView({
 
               {/* Attachments */}
               {msg.attachments && msg.attachments.length > 0 && (
-                <div className="mt-2 text-xs opacity-75">
-                  {msg.attachments.length} attachment(s)
+                <div className="mt-2 space-y-2">
+                  {msg.attachments.map((url, idx) => (
+                    <div key={idx} className="rounded overflow-hidden">
+                      {url.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i) ||
+                      url.includes("image") ? (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={url}
+                            alt={`Attachment ${idx + 1}`}
+                            className="max-w-full max-h-48 rounded object-contain"
+                            onError={(e) => {
+                              // If image fails to load, show a link instead
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = "none";
+                              target.nextElementSibling?.classList.remove(
+                                "hidden",
+                              );
+                            }}
+                          />
+                          <span className="hidden text-xs underline">
+                            View attachment
+                          </span>
+                        </a>
+                      ) : (
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs underline hover:opacity-80"
+                        >
+                          Attachment {idx + 1}
+                        </a>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 
@@ -236,25 +281,47 @@ export function ChatView({
                     />
                   )}
                 </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (
-                      confirm("Are you sure you want to delete this message?")
-                    ) {
-                      onDeleteMessage(msg.id);
-                    }
-                  }}
-                  disabled={isDeleting}
-                  className={`shrink-0 p-1 rounded hover:bg-foreground/10 transition-colors ${
-                    msg.role === "user"
-                      ? "text-primary-foreground/70 hover:text-primary-foreground"
-                      : "text-muted-foreground hover:text-destructive"
-                  }`}
-                  title="Delete message"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+                <div className="flex items-center gap-1">
+                  {/* Retry button for failed messages */}
+                  {msg.role === "assistant" &&
+                    (msg.deliveryStatus === "failed" ||
+                      msg.deliveryStatus === "timeout") && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRetryMessage(msg.id);
+                        }}
+                        disabled={isRetrying}
+                        className="shrink-0 p-1 rounded hover:bg-foreground/10 transition-colors text-muted-foreground hover:text-primary"
+                        title="Retry sending"
+                      >
+                        <RefreshCw
+                          className={`w-3 h-3 ${
+                            isRetrying ? "animate-spin" : ""
+                          }`}
+                        />
+                      </button>
+                    )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (
+                        confirm("Are you sure you want to delete this message?")
+                      ) {
+                        onDeleteMessage(msg.id);
+                      }
+                    }}
+                    disabled={isDeleting}
+                    className={`shrink-0 p-1 rounded hover:bg-foreground/10 transition-colors ${
+                      msg.role === "user"
+                        ? "text-primary-foreground/70 hover:text-primary-foreground"
+                        : "text-muted-foreground hover:text-destructive"
+                    }`}
+                    title="Delete message"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </div>
           </div>

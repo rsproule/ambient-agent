@@ -14,7 +14,9 @@ export async function fetchConversations(): Promise<ConversationListItem[]> {
   return data.conversations || [];
 }
 
-export async function fetchConversation(id: string): Promise<ConversationDetail> {
+export async function fetchConversation(
+  id: string,
+): Promise<ConversationDetail> {
   const res = await fetch(`/api/admin/conversations/${id}`);
   if (!res.ok) {
     if (res.status === 401) throw new Error("Unauthorized");
@@ -51,6 +53,19 @@ export async function sendMessage({
   if (!response.ok) {
     const data = await response.json();
     throw new Error(data.error || "Failed to send message");
+  }
+  return response.json();
+}
+
+export async function retryMessage(
+  messageId: string,
+): Promise<{ success: boolean; taskId: string; messageId: string }> {
+  const response = await fetch(`/api/admin/messages/${messageId}/retry`, {
+    method: "POST",
+  });
+  if (!response.ok) {
+    const data = await response.json();
+    throw new Error(data.error || "Failed to retry message");
   }
   return response.json();
 }

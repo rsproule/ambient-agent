@@ -70,8 +70,8 @@ export const handleMessageResponse = task({
         }
 
         try {
-          // Execute action and get LoopMessage ID
-          const loopMessageId = await executeAction(action, payload);
+          // Execute action and get LoopMessage ID + attachments
+          const result = await executeAction(action, payload);
           results.push({ index: i, type: action.type, success: true });
 
           // Save successful actions to the database with messageId for delivery tracking
@@ -79,7 +79,8 @@ export const handleMessageResponse = task({
             await saveAssistantMessage(
               payload.conversationId,
               action.text,
-              loopMessageId,
+              result.messageId,
+              result.attachments,
             );
           } else if (action.type === "reaction") {
             // Save reactions with a special format
@@ -87,7 +88,7 @@ export const handleMessageResponse = task({
             await saveAssistantMessage(
               payload.conversationId,
               reactionContent,
-              loopMessageId,
+              result.messageId,
             );
           }
         } catch (error) {
@@ -153,10 +154,15 @@ function filterValidAttachments(attachments?: string[]): string[] | undefined {
   return valid.length > 0 ? valid : undefined;
 }
 
+interface ExecuteActionResult {
+  messageId: string | undefined;
+  attachments?: string[];
+}
+
 async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
-): Promise<string | undefined> {
+): Promise<ExecuteActionResult> {
   // Validate we have a recipient or group
   if (!payload.group && !payload.recipient) {
     throw new Error(
@@ -207,7 +213,7 @@ async function executeAction(
           subject: action.subject,
         });
       }
-      return response.message_id;
+      return { messageId: response.message_id, attachments: validAttachments };
 
     case "reaction":
       const reactionResponse = await client.sendReaction({
@@ -216,6 +222,6 @@ async function executeAction(
         message_id: action.message_id,
         reaction: action.reaction,
       });
-      return reactionResponse.message_id;
+      return { messageId: reactionResponse.message_id };
   }
 }

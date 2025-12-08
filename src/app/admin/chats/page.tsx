@@ -2,8 +2,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 
+import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   ChatView,
   ContextSidebar,
@@ -13,12 +14,44 @@ import {
   fetchConversation,
   fetchConversations,
   MessageDetailsDialog,
+  retryMessage,
   sendMessage,
   type Message,
   type UserContextDocument,
 } from "./_components";
 
+// Loading fallback for Suspense
+function AdminChatsLoading() {
+  return (
+    <div className="min-h-screen bg-background flex justify-center pt-16">
+      <div className="w-full max-w-7xl flex border-x border-border h-[calc(100vh-4rem)]">
+        <div className="w-80 bg-card border-r border-border p-4 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-24" />
+          <div className="space-y-3 mt-6">
+            {[...Array(5)].map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          Loading...
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Main page wrapper with Suspense
 export default function AdminChatsPage() {
+  return (
+    <Suspense fallback={<AdminChatsLoading />}>
+      <AdminChatsContent />
+    </Suspense>
+  );
+}
+
+function AdminChatsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedConvoId = searchParams.get("chat");
@@ -58,7 +91,7 @@ export default function AdminChatsPage() {
     queryKey: ["admin-conversation", selectedConvoId],
     queryFn: () => fetchConversation(selectedConvoId!),
     enabled: !!selectedConvoId,
-    refetchInterval: 5000,
+    refetchInterval: 2000,
   });
 
   // Delete message mutation
@@ -87,6 +120,19 @@ export default function AdminChatsPage() {
     },
   });
 
+  // Retry message mutation
+  const retryMutation = useMutation({
+    mutationFn: retryMessage,
+    onSuccess: () => {
+      // Refetch conversation details after retry (with slight delay for task to complete)
+      setTimeout(() => {
+        queryClient.invalidateQueries({
+          queryKey: ["admin-conversation", selectedConvoId],
+        });
+      }, 1000);
+    },
+  });
+
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversationDetail) return;
 
@@ -101,7 +147,7 @@ export default function AdminChatsPage() {
 
   return (
     <div className="min-h-screen bg-background flex justify-center pt-16">
-      <div className="w-full max-w-7xl flex border-x border-border h-[calc(100vh-4rem)]">
+      <div className="w-full max-w-[2000px] flex border-x border-border h-[calc(100vh-4rem)]">
         {/* Left Sidebar - Conversation List */}
         <ConversationList
           conversations={conversations}
@@ -123,6 +169,8 @@ export default function AdminChatsPage() {
             onMessageClick={setSelectedMessage}
             onDeleteMessage={(id) => deleteMutation.mutate(id)}
             isDeleting={deleteMutation.isPending}
+            onRetryMessage={(id) => retryMutation.mutate(id)}
+            isRetrying={retryMutation.isPending}
             messageInput={messageInput}
             onMessageInputChange={setMessageInput}
             onSendMessage={handleSendMessage}
@@ -145,6 +193,8 @@ export default function AdminChatsPage() {
           onClose={() => setSelectedMessage(null)}
           onDelete={(id) => deleteMutation.mutate(id)}
           isDeleting={deleteMutation.isPending}
+          onRetry={(id) => retryMutation.mutate(id)}
+          isRetrying={retryMutation.isPending}
         />
 
         {/* Document Dialog */}

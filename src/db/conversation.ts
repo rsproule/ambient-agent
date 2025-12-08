@@ -166,6 +166,7 @@ export async function saveAssistantMessage(
   conversationId: string,
   content: string | object,
   messageId?: string,
+  attachments?: string[],
 ) {
   const conversation = await getOrCreateConversation(conversationId);
 
@@ -175,7 +176,7 @@ export async function saveAssistantMessage(
       role: "assistant",
       content: content as Prisma.InputJsonValue,
       messageId,
-      attachments: [], // Assistant messages can have attachments too
+      attachments: attachments || [],
       // Set delivery status to pending if we have a messageId (means we're sending via LoopMessage)
       deliveryStatus: messageId ? "pending" : undefined,
     },

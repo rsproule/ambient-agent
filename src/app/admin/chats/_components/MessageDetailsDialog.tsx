@@ -9,7 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/src/components/ui/dialog";
-import { Trash2 } from "lucide-react";
+import { RefreshCw, Trash2 } from "lucide-react";
 import type { Message } from "./types";
 
 interface MessageDetailsDialogProps {
@@ -17,6 +17,8 @@ interface MessageDetailsDialogProps {
   onClose: () => void;
   onDelete: (id: string) => void;
   isDeleting: boolean;
+  onRetry?: (id: string) => void;
+  isRetrying?: boolean;
 }
 
 export function MessageDetailsDialog({
@@ -24,6 +26,8 @@ export function MessageDetailsDialog({
   onClose,
   onDelete,
   isDeleting,
+  onRetry,
+  isRetrying,
 }: MessageDetailsDialogProps) {
   if (!message) return null;
 
@@ -66,7 +70,9 @@ export function MessageDetailsDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="min-w-0">
-              <label className="text-xs text-muted-foreground">Created At</label>
+              <label className="text-xs text-muted-foreground">
+                Created At
+              </label>
               <p className="text-sm break-all">
                 {new Date(message.createdAt).toLocaleString()}
               </p>
@@ -131,7 +137,9 @@ export function MessageDetailsDialog({
           {message.role === "system" && (
             <div className="grid grid-cols-2 gap-4">
               <div className="min-w-0">
-                <label className="text-xs text-muted-foreground">Forwarded</label>
+                <label className="text-xs text-muted-foreground">
+                  Forwarded
+                </label>
                 <p className="text-sm">
                   {message.forwarded === true
                     ? "✓ Yes"
@@ -174,7 +182,9 @@ export function MessageDetailsDialog({
 
           {/* Content */}
           <div className="min-w-0">
-            <label className="text-xs text-muted-foreground">Content (Raw)</label>
+            <label className="text-xs text-muted-foreground">
+              Content (Raw)
+            </label>
             <pre className="text-sm bg-muted p-3 rounded overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all">
               {typeof message.content === "string"
                 ? message.content
@@ -182,8 +192,30 @@ export function MessageDetailsDialog({
             </pre>
           </div>
 
-          {/* Delete Button */}
-          <div className="pt-4 border-t border-border">
+          {/* Action Buttons */}
+          <div className="pt-4 border-t border-border flex gap-2">
+            {/* Retry Button (only for failed/timeout messages) */}
+            {message.role === "assistant" &&
+              (message.deliveryStatus === "failed" ||
+                message.deliveryStatus === "timeout") &&
+              onRetry && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    onRetry(message.id);
+                    onClose();
+                  }}
+                  disabled={isRetrying}
+                >
+                  <RefreshCw
+                    className={`w-4 h-4 mr-2 ${
+                      isRetrying ? "animate-spin" : ""
+                    }`}
+                  />
+                  Retry Send
+                </Button>
+              )}
             <Button
               variant="destructive"
               size="sm"
