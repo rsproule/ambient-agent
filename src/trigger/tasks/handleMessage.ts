@@ -3,6 +3,7 @@ import {
   releaseResponseLock,
   saveAssistantMessage,
 } from "@/src/db/conversation";
+import { logError, logMessageOut } from "@/src/db/events";
 import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
 import { type MessageAction } from "@/src/lib/loopmessage-sdk/message-actions";
 import { task, wait } from "@trigger.dev/sdk/v3";
@@ -78,10 +79,15 @@ export const handleMessageResponse = task({
           if (action.type === "message") {
             await saveAssistantMessage(
               payload.conversationId,
-              action.text,
+              action.text || "",
               result.messageId,
               result.attachments,
             );
+            // Log outgoing message event
+            await logMessageOut(payload.conversationId, {
+              content: action.text || "",
+              messageId: result.messageId,
+            });
           } else if (action.type === "reaction") {
             // Save reactions with a special format
             const reactionContent = `[REACTION: ${action.reaction} on msg_id: ${action.message_id}]`;
@@ -90,6 +96,11 @@ export const handleMessageResponse = task({
               reactionContent,
               result.messageId,
             );
+            // Log reaction event
+            await logMessageOut(payload.conversationId, {
+              content: reactionContent,
+              messageId: result.messageId,
+            });
           }
         } catch (error) {
           const errorMsg =
@@ -103,6 +114,11 @@ export const handleMessageResponse = task({
             type: action.type,
             success: false,
             error: errorMsg,
+          });
+          // Log error event
+          await logError(payload.conversationId, {
+            error: errorMsg,
+            context: `action_${action.type}_failed`,
           });
           // Continue to next action - don't block on LLM-generated bad actions
         }
@@ -182,7 +198,12 @@ async function executeAction(
   );
 
   switch (action.type) {
-    case "message":
+    case "message": {
+      // Validate required fields for message type
+      if (!action.text) {
+        throw new Error("Message action missing required 'text' field");
+      }
+
       // Filter attachments to only valid HTTPS URLs
       const validAttachments = filterValidAttachments(action.attachments);
 
@@ -214,8 +235,16 @@ async function executeAction(
         });
       }
       return { messageId: response.message_id, attachments: validAttachments };
+    }
 
-    case "reaction":
+    case "reaction": {
+      // Validate required fields for reaction type
+      if (!action.message_id || !action.reaction) {
+        throw new Error(
+          "Reaction action missing required 'message_id' or 'reaction' field",
+        );
+      }
+
       const reactionResponse = await client.sendReaction({
         ...baseParams,
         text: "Reaction", // Required by SDK validation but ignored by API for reactions
@@ -223,5 +252,6 @@ async function executeAction(
         reaction: action.reaction,
       });
       return { messageId: reactionResponse.message_id };
+    }
   }
 }

@@ -1,23 +1,35 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
   ChatView,
   ContextSidebar,
   ConversationList,
+  deleteConversation,
+  DeleteConversationDialog,
   deleteMessage,
   DocumentDialog,
+  EventView,
   fetchConversation,
+  fetchConversationEvents,
+  fetchConversationMessages,
   fetchConversations,
   MessageDetailsDialog,
   retryMessage,
   sendMessage,
+  type ConversationInfo,
   type Message,
   type UserContextDocument,
+  type ViewMode,
 } from "./_components";
 
 // Loading fallback for Suspense
@@ -60,7 +72,10 @@ function AdminChatsContent() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [selectedDocument, setSelectedDocument] =
     useState<UserContextDocument | null>(null);
+  const [conversationToDelete, setConversationToDelete] =
+    useState<ConversationInfo | null>(null);
   const [showContext, setShowContext] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("chat");
   const queryClient = useQueryClient();
 
   // Update URL when selecting a conversation
@@ -82,7 +97,7 @@ function AdminChatsContent() {
     queryFn: fetchConversations,
   });
 
-  // Fetch selected conversation details (poll every 5 seconds)
+  // Fetch selected conversation details (metadata only, not messages)
   const {
     data: conversationDetail,
     isLoading: loadingDetail,
@@ -91,8 +106,58 @@ function AdminChatsContent() {
     queryKey: ["admin-conversation", selectedConvoId],
     queryFn: () => fetchConversation(selectedConvoId!),
     enabled: !!selectedConvoId,
-    refetchInterval: 2000,
+    refetchInterval: 5000,
   });
+
+  // Fetch messages with infinite scroll (paginated)
+  const {
+    data: messagesData,
+    isLoading: loadingMessages,
+    error: messagesError,
+    fetchNextPage: fetchMoreMessages,
+    hasNextPage: hasMoreMessages,
+    isFetchingNextPage: isFetchingMoreMessages,
+  } = useInfiniteQuery({
+    queryKey: ["admin-conversation-messages", selectedConvoId],
+    queryFn: ({ pageParam }) =>
+      fetchConversationMessages(selectedConvoId!, pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    enabled: !!selectedConvoId && viewMode === "chat",
+    refetchInterval: 3000,
+  });
+
+  // Flatten messages from all pages (reverse to show oldest first)
+  const messages = useMemo(() => {
+    if (!messagesData?.pages) return [];
+    // Pages are newest-first, messages within pages are newest-first
+    // We need to reverse both to get chronological order
+    return messagesData.pages.flatMap((page) => page.messages).reverse();
+  }, [messagesData]);
+
+  // Fetch events with infinite scroll (paginated)
+  const {
+    data: eventsData,
+    isLoading: loadingEvents,
+    error: eventsError,
+    fetchNextPage: fetchMoreEvents,
+    hasNextPage: hasMoreEvents,
+    isFetchingNextPage: isFetchingMoreEvents,
+  } = useInfiniteQuery({
+    queryKey: ["admin-conversation-events", selectedConvoId],
+    queryFn: ({ pageParam }) =>
+      fetchConversationEvents(selectedConvoId!, pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    enabled: !!selectedConvoId && viewMode === "events",
+    refetchInterval: 5000,
+  });
+
+  // Flatten events from all pages
+  const events = useMemo(() => {
+    if (!eventsData?.pages) return [];
+    return eventsData.pages.flatMap((page) => page.events);
+  }, [eventsData]);
 
   // Delete message mutation
   const deleteMutation = useMutation({
@@ -133,6 +198,16 @@ function AdminChatsContent() {
     },
   });
 
+  // Delete conversation mutation
+  const deleteConversationMutation = useMutation({
+    mutationFn: deleteConversation,
+    onSuccess: () => {
+      setConversationToDelete(null);
+      setSelectedConvoId(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
+    },
+  });
+
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversationDetail) return;
 
@@ -162,8 +237,9 @@ function AdminChatsContent() {
           {/* Chat Area */}
           <ChatView
             conversationDetail={conversationDetail}
-            isLoading={!!selectedConvoId && loadingDetail}
-            error={detailError}
+            messages={messages}
+            isLoading={!!selectedConvoId && (loadingDetail || loadingMessages)}
+            error={detailError || messagesError}
             showContext={showContext}
             onToggleContext={() => setShowContext(!showContext)}
             onMessageClick={setSelectedMessage}
@@ -174,6 +250,25 @@ function AdminChatsContent() {
             onSendMessage={handleSendMessage}
             isSending={sendMessageMutation.isPending}
             sendError={sendMessageMutation.error}
+            onDeleteConversation={() =>
+              conversationDetail &&
+              setConversationToDelete(conversationDetail.conversation)
+            }
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onLoadMoreMessages={() => fetchMoreMessages()}
+            hasMoreMessages={hasMoreMessages}
+            isLoadingMoreMessages={isFetchingMoreMessages}
+            eventContent={
+              <EventView
+                events={events}
+                isLoading={loadingEvents}
+                error={eventsError}
+                onLoadMore={() => fetchMoreEvents()}
+                hasMore={hasMoreEvents}
+                isLoadingMore={isFetchingMoreEvents}
+              />
+            }
           />
 
           {/* Right Sidebar - Context */}
@@ -199,6 +294,14 @@ function AdminChatsContent() {
         <DocumentDialog
           document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
+        />
+
+        {/* Delete Conversation Dialog */}
+        <DeleteConversationDialog
+          conversation={conversationToDelete}
+          onClose={() => setConversationToDelete(null)}
+          onConfirm={(id) => deleteConversationMutation.mutate(id)}
+          isDeleting={deleteConversationMutation.isPending}
         />
       </div>
     </div>

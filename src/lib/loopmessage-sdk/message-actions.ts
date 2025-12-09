@@ -10,40 +10,41 @@ import { MESSAGE_EFFECTS, MESSAGE_REACTIONS } from "./constants";
 
 /**
  * Message Action Schema - AI agent actions that map to LoopMessage API calls
+ *
+ * Note: Using a single object with optional fields instead of discriminatedUnion
+ * because Anthropic doesn't support oneOf in structured output schemas.
  */
-export const MessageActionSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("message"),
-    text: z.string().describe("The message text to send"),
-    delay: z
-      .number()
-      .optional()
-      .describe(
-        "Delay in milliseconds before sending this message (for realistic pauses)",
-      ),
-    attachments: z
-      .array(z.string())
-      .optional()
-      .describe("Array of image URLs to attach"),
-    effect: z.enum(MESSAGE_EFFECTS).optional().describe("iMessage effect"),
-    subject: z
-      .string()
-      .optional()
-      .describe("Message subject (appears as bold title)"),
-    reply_to_id: z.string().optional().describe("Message ID to reply to"),
-  }),
-  z.object({
-    type: z.literal("reaction"),
-    message_id: z.string().describe("The message ID to react to"),
-    reaction: z
-      .enum(MESSAGE_REACTIONS)
-      .describe("Reaction type (prefix with - to remove)"),
-    delay: z
-      .number()
-      .optional()
-      .describe("Delay in milliseconds before sending this reaction"),
-  }),
-]);
+export const MessageActionSchema = z.object({
+  type: z.enum(["message", "reaction"]).describe("Action type"),
+  // Message fields (required when type is 'message')
+  text: z.string().optional().describe("The message text to send"),
+  attachments: z
+    .array(z.string())
+    .optional()
+    .describe("Array of image URLs to attach"),
+  effect: z.enum(MESSAGE_EFFECTS).optional().describe("iMessage effect"),
+  subject: z
+    .string()
+    .optional()
+    .describe("Message subject (appears as bold title)"),
+  reply_to_id: z.string().optional().describe("Message ID to reply to"),
+  // Reaction fields (required when type is 'reaction')
+  message_id: z
+    .string()
+    .optional()
+    .describe("The message ID to react to (required for reactions)"),
+  reaction: z
+    .enum(MESSAGE_REACTIONS)
+    .optional()
+    .describe(
+      "Reaction type (required for reactions, prefix with - to remove)",
+    ),
+  // Shared fields
+  delay: z
+    .number()
+    .optional()
+    .describe("Delay in milliseconds before sending this action"),
+});
 
 export const IMessageResponseSchema = z.object({
   actions: z

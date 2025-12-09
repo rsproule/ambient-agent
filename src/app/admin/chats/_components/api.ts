@@ -1,6 +1,11 @@
 // API functions for admin chats
 
-import type { ConversationDetail, ConversationListItem } from "./types";
+import type {
+  ConversationDetail,
+  ConversationListItem,
+  PaginatedEvents,
+  PaginatedMessages,
+} from "./types";
 
 export async function fetchConversations(): Promise<ConversationListItem[]> {
   const res = await fetch("/api/admin/conversations");
@@ -104,4 +109,54 @@ export async function checkMessageStatus(
     throw new Error(data.error || "Failed to check message status");
   }
   return response.json();
+}
+
+export async function deleteConversation(
+  conversationId: string,
+): Promise<void> {
+  const res = await fetch(`/api/admin/conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "Failed to delete conversation");
+  }
+}
+
+export async function fetchConversationEvents(
+  conversationId: string,
+  cursor?: string,
+): Promise<PaginatedEvents> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+
+  const res = await fetch(
+    `/api/admin/conversations/${conversationId}/events?${params}`,
+  );
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Unauthorized");
+    if (res.status === 403)
+      throw new Error("Forbidden - Admin access required");
+    throw new Error("Failed to fetch events");
+  }
+  return res.json();
+}
+
+export async function fetchConversationMessages(
+  conversationId: string,
+  cursor?: string,
+): Promise<PaginatedMessages> {
+  const params = new URLSearchParams();
+  if (cursor) params.set("cursor", cursor);
+
+  const res = await fetch(
+    `/api/admin/conversations/${conversationId}/messages?${params}`,
+  );
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Unauthorized");
+    if (res.status === 403)
+      throw new Error("Forbidden - Admin access required");
+    throw new Error("Failed to fetch messages");
+  }
+  return res.json();
 }

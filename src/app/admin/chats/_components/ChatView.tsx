@@ -1,6 +1,12 @@
 "use client";
 
 import { Button } from "@/src/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/src/components/ui/dropdown-menu";
 import { Input } from "@/src/components/ui/input";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
@@ -8,14 +14,18 @@ import {
   Check,
   CheckCheck,
   Clock,
+  History,
   Loader2,
+  MessageSquare,
+  MoreVertical,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   Send,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { ConversationDetail, Message } from "./types";
+import type { ConversationDetail, Message, ViewMode } from "./types";
 import { formatDate, getMessageText } from "./utils";
 
 // Delivery status indicator component
@@ -69,6 +79,7 @@ function DeliveryStatusIcon({
 
 interface ChatViewProps {
   conversationDetail: ConversationDetail | undefined;
+  messages: Message[];
   isLoading: boolean;
   error: Error | null;
   showContext: boolean;
@@ -81,10 +92,18 @@ interface ChatViewProps {
   onSendMessage: () => void;
   isSending: boolean;
   sendError: Error | null;
+  onDeleteConversation: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  onLoadMoreMessages?: () => void;
+  hasMoreMessages?: boolean;
+  isLoadingMoreMessages?: boolean;
+  eventContent?: React.ReactNode;
 }
 
 export function ChatView({
   conversationDetail,
+  messages,
   isLoading,
   error,
   showContext,
@@ -97,15 +116,38 @@ export function ChatView({
   onSendMessage,
   isSending,
   sendError,
+  onDeleteConversation,
+  viewMode,
+  onViewModeChange,
+  onLoadMoreMessages,
+  hasMoreMessages,
+  isLoadingMoreMessages,
+  eventContent,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages load or change
+  // Scroll to bottom when messages load, change, or view mode switches
   useEffect(() => {
-    if (conversationDetail?.messages) {
+    if (messages.length > 0 && viewMode === "chat") {
       messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
     }
-  }, [conversationDetail?.messages]);
+  }, [messages.length, viewMode]);
+
+  // Handle scroll to load more messages
+  const handleScroll = () => {
+    if (
+      !messagesContainerRef.current ||
+      !hasMoreMessages ||
+      isLoadingMoreMessages
+    )
+      return;
+    const { scrollTop } = messagesContainerRef.current;
+    // Load more when scrolled near the top (older messages)
+    if (scrollTop < 100 && onLoadMoreMessages) {
+      onLoadMoreMessages();
+    }
+  };
 
   // Header with toggle button (shown in all states when conversation exists)
   const header = conversationDetail ? (
@@ -122,19 +164,57 @@ export function ChatView({
             ` · ${conversationDetail.conversation.participants.length} participants`}
         </p>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggleContext}
-        title={showContext ? "Hide context" : "Show context"}
-        className="shrink-0"
-      >
-        {showContext ? (
-          <PanelRightClose className="w-4 h-4" />
-        ) : (
-          <PanelRightOpen className="w-4 h-4" />
-        )}
-      </Button>
+      <div className="flex items-center gap-1 shrink-0">
+        {/* View toggle */}
+        <div className="flex items-center border border-border rounded-md overflow-hidden mr-2">
+          <Button
+            variant={viewMode === "chat" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onViewModeChange("chat")}
+            className="rounded-none h-8 px-3"
+          >
+            <MessageSquare className="w-4 h-4 mr-1" />
+            Chat
+          </Button>
+          <Button
+            variant={viewMode === "events" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onViewModeChange("events")}
+            className="rounded-none h-8 px-3"
+          >
+            <History className="w-4 h-4 mr-1" />
+            Events
+          </Button>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={onDeleteConversation}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Conversation
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleContext}
+          title={showContext ? "Hide context" : "Show context"}
+        >
+          {showContext ? (
+            <PanelRightClose className="w-4 h-4" />
+          ) : (
+            <PanelRightOpen className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
     </div>
   ) : null;
 
@@ -172,13 +252,42 @@ export function ChatView({
     );
   }
 
+  // Event view mode
+  if (viewMode === "events") {
+    return (
+      <div className="flex-1 flex flex-col bg-card h-full overflow-hidden">
+        {header}
+        {eventContent}
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-card h-full overflow-hidden">
       {header}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {conversationDetail.messages.map((msg) => (
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3"
+      >
+        {/* Load more indicator */}
+        {hasMoreMessages && (
+          <div className="flex justify-center py-2">
+            {isLoadingMoreMessages ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <button
+                onClick={onLoadMoreMessages}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Load older messages
+              </button>
+            )}
+          </div>
+        )}
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${

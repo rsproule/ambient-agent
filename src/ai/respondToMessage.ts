@@ -1,4 +1,5 @@
 import type { Agent } from "@/src/ai/agents/types";
+import { getAppForContext } from "@/src/ai/apps";
 import {
   createCalendarTools,
   createCompleteOnboardingTool,
@@ -10,10 +11,12 @@ import {
   createRequestFeatureTool,
   createRequestResearchTool,
   createScheduledJobTools,
+  createSwitchAppTool,
   createUpdateUserContextTool,
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
+import { logToolCall } from "@/src/db/events";
 import logger from "@/src/lib/logger";
 import type {
   IMessageResponse,
@@ -57,12 +60,18 @@ export interface RespondToMessageOptions {
  * @returns Array of MessageActions (messages or reactions) to execute
  */
 export async function respondToMessage(
-  agent: Agent,
+  defaultAgent: Agent,
   messages: ModelMessage[],
   context: ConversationContext,
   options?: RespondToMessageOptions,
 ): Promise<MessageAction[]> {
   const before = performance.now();
+
+  // Get active app (foreground app for this conversation)
+  const activeApp = getAppForContext(context);
+
+  // Use app's agent if defined, otherwise use the default agent
+  const agent = activeApp?.agent ?? defaultAgent;
 
   // Build conversation context string using agent's context builder
   const contextString = agent.buildContext(context);
@@ -80,6 +89,7 @@ export async function respondToMessage(
     requestResearch: createRequestResearchTool(context),
     requestFeature: createRequestFeatureTool(context),
     completeOnboarding: createCompleteOnboardingTool(context),
+    switchApp: createSwitchAppTool(context),
     ...createScheduledJobTools(context),
   };
 
@@ -105,11 +115,26 @@ export async function respondToMessage(
       }
     : {};
 
-  const allTools = {
+  // Combine all available tools
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let allTools: Record<string, any> = {
     ...(agent.tools || {}),
     ...contextBoundTools,
     ...integrationTools,
   };
+
+  // If an app is active, filter tools to only those allowed
+  if (activeApp?.allowedTools) {
+    const allowedSet = new Set(activeApp.allowedTools);
+    allTools = Object.fromEntries(
+      Object.entries(allTools).filter(([name]) => allowedSet.has(name)),
+    );
+  }
+
+  // Add app-specific additional tools
+  if (activeApp?.additionalTools) {
+    allTools = { ...allTools, ...activeApp.additionalTools };
+  }
 
   const totalToolCount = Object.keys(allTools).length;
   const log = logger.child({
@@ -117,11 +142,13 @@ export async function respondToMessage(
     conversationId: context.conversationId,
     isGroup: context.isGroup,
     sender: context.sender,
+    app: activeApp?.id || "default",
   });
 
   log.info("Generating response", {
     type: context.isGroup ? "GROUP_CHAT" : "DIRECT_MESSAGE",
     toolCount: totalToolCount,
+    app: activeApp?.id || "default",
   });
 
   if (context.isGroup && !context.sender) {
@@ -132,6 +159,13 @@ export async function respondToMessage(
   }
   if (userHasConnections) {
     log.debug("User has active OAuth connections - integration tools enabled");
+  }
+  if (activeApp) {
+    log.debug("App active", {
+      appId: activeApp.id,
+      appName: activeApp.name,
+      allowedTools: activeApp.allowedTools,
+    });
   }
 
   log.debug("Tool list", { tools: Object.keys(allTools) });
@@ -144,8 +178,20 @@ export async function respondToMessage(
     }
   });
 
-  // Combine context with agent's base instructions
-  const systemPrompt = `${contextString}\n\n${agent.baseInstructions}`;
+  // Build app context injection if an app is active
+  let appContextInjection = "";
+  if (activeApp) {
+    const separator = "═".repeat(50);
+    appContextInjection = `\n\n${separator}\nAPP: ${activeApp.name}\n\n${activeApp.systemPrompt}\n${separator}`;
+
+    // Add custom app context if defined
+    if (activeApp.buildAppContext) {
+      appContextInjection += `\n\n${activeApp.buildAppContext(context)}`;
+    }
+  }
+
+  // Combine context with agent's base instructions and app prompt
+  const systemPrompt = `${contextString}${appContextInjection}\n\n${agent.baseInstructions}`;
 
   // Track if we've already notified about tool use (only fire once)
   let hasNotifiedToolUse = false;
@@ -258,42 +304,45 @@ export async function respondToMessage(
     log.info("Response generated", { timeMs: Math.round(after - before) });
 
     if (result.steps && result.steps.length > 0) {
-      result.steps.forEach((step, stepIdx) => {
-        if (step.toolCalls && step.toolCalls.length > 0) {
-          step.toolCalls.forEach((toolCall) => {
-            log.debug("Tool call", {
-              step: stepIdx + 1,
-              tool: toolCall.toolName,
-              input: toolCall.input,
-            });
-          });
-        }
+      for (const step of result.steps) {
+        // Log tool calls with their results
+        if (step.toolCalls && step.toolResults) {
+          for (let i = 0; i < step.toolCalls.length; i++) {
+            const toolCall = step.toolCalls[i];
+            const toolResult = step.toolResults[i];
 
-        if (step.toolResults && step.toolResults.length > 0) {
-          step.toolResults.forEach((toolResult) => {
-            const output = toolResult.output as
+            const output = toolResult?.output as
               | { success?: boolean; message?: string }
               | undefined;
 
-            if (
+            const success = !(
               output &&
               typeof output === "object" &&
               output.success === false
-            ) {
+            );
+
+            if (!success) {
               log.error("Tool failed", {
-                step: stepIdx + 1,
-                tool: toolResult.toolName,
-                error: output.message || "Unknown error",
+                tool: toolCall.toolName,
+                error: output?.message || "Unknown error",
               });
             } else {
               log.debug("Tool result", {
-                step: stepIdx + 1,
-                tool: toolResult.toolName,
+                tool: toolCall.toolName,
               });
             }
-          });
+
+            // Log tool call event
+            await logToolCall(context.conversationId, {
+              toolName: toolCall.toolName,
+              input: toolCall.input,
+              output: toolResult?.output,
+              success,
+              error: !success ? output?.message : undefined,
+            });
+          }
         }
-      });
+      }
     }
 
     const output = result.output as IMessageResponse;

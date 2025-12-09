@@ -66,6 +66,7 @@ export interface ConversationContext {
   groupParticipants?: GroupParticipantInfo[] | null; // Identity info for group participants
   recentAttachments?: string[]; // URLs of recent image attachments from the conversation (most recent first)
   groupChatCustomPrompt?: string | null; // Custom prompt for this group chat (injected into system prompt)
+  currentApp?: string | null; // Active app ID (e.g., "negotiation"), null = default
 }
 
 /**
@@ -549,6 +550,7 @@ export async function getConversationMessages(
       recentAttachments:
         recentAttachments.length > 0 ? recentAttachments : undefined,
       groupChatCustomPrompt,
+      currentApp: conversation.currentApp ?? null,
     },
   };
 }

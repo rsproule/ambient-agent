@@ -51,7 +51,7 @@ export function DocumentDialog({ document, onClose }: DocumentDialogProps) {
           {/* Content */}
           <div className="min-w-0">
             <label className="text-xs text-muted-foreground">Content</label>
-            <pre className="mt-1 text-sm bg-muted p-4 rounded overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap break-words">
+            <pre className="mt-1 text-sm bg-muted p-4 rounded overflow-x-auto max-h-96 overflow-y-auto whitespace-pre-wrap wrap-break-word">
               {document.content}
             </pre>
           </div>
