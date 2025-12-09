@@ -3,6 +3,7 @@ import {
   saveUserMessage,
   updateMessageDeliveryStatus,
 } from "@/src/db/conversation";
+import { logError, logMessageIn } from "@/src/db/events";
 import { upsertUser, upsertUsers } from "@/src/db/user";
 import logger, { createContextLogger } from "@/src/lib/logger";
 import {
@@ -190,6 +191,14 @@ async function inboundMessageHandler(
   );
   log.info("Message saved", { messageId: savedMessage.id });
 
+  // Log event
+  await logMessageIn(conversationId, {
+    sender,
+    content: webhook.text || "",
+    messageId: webhook.message_id,
+    isGroup,
+  });
+
   // Trigger debounced response task with the message timestamp
   log.info("Triggering debounced response");
   await debouncedResponse.trigger({
@@ -312,6 +321,17 @@ async function handleMessageFailed(
     "failed",
     `Error ${webhook.error_code}: ${errorDescription}`,
   );
+
+  // Log error event
+  await logError(undefined, {
+    error: `Message delivery failed: ${errorDescription}`,
+    context: "message_failed_webhook",
+    stack: JSON.stringify({
+      messageId: webhook.message_id,
+      errorCode: webhook.error_code,
+      recipient: webhook.recipient,
+    }),
+  });
 }
 
 /**
@@ -407,4 +427,15 @@ async function handleMessageTimeout(
     "timeout",
     `Error ${webhook.error_code}: ${errorDescription}`,
   );
+
+  // Log error event
+  await logError(undefined, {
+    error: `Message delivery timeout: ${errorDescription}`,
+    context: "message_timeout_webhook",
+    stack: JSON.stringify({
+      messageId: webhook.message_id,
+      errorCode: webhook.error_code,
+      recipient: webhook.recipient,
+    }),
+  });
 }

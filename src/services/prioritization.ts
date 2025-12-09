@@ -9,12 +9,12 @@ import { generateObject } from "ai";
 import { z } from "zod";
 
 const anthropic = createAnthropic({
-  apiKey: process.env.ECHO_API_KEY,
-  baseURL: "https://echo.router.merit.systems",
+  // apiKey: process.env.ECHO_API_KEY,
+  // baseURL: "https://echo.router.merit.systems",
 });
 
 // Use a fast, cheap model for value evaluation
-const model = anthropic("claude-haiku-4-5-20251001");
+const model = anthropic("claude-sonnet-4-5");
 
 /**
  * Default configuration values for prioritization

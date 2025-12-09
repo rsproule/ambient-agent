@@ -6,8 +6,8 @@ import { createAgent } from "./factory";
 import { mrWhiskersPersonality } from "./personalities";
 
 const anthropic = createAnthropic({
-  apiKey: process.env.ECHO_API_KEY,
-  baseURL: "https://echo.router.merit.systems",
+  // apiKey: process.env.ECHO_API_KEY,
+  // baseURL: "https://echo.router.merit.systems",
 });
 
 /**
@@ -22,7 +22,7 @@ const anthropic = createAnthropic({
  */
 export const mrWhiskersAgent = createAgent({
   personality: mrWhiskersPersonality,
-  model: anthropic("claude-haiku-4-5-20251001"),
+  model: anthropic("claude-sonnet-4-5"),
   schema: IMessageResponseSchema,
   tools: {
     // Static tools

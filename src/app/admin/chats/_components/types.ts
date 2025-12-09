@@ -1,5 +1,7 @@
 // Shared types for admin chats
 
+export type ViewMode = "chat" | "events";
+
 export interface ConversationListItem {
   id: string;
   conversationId: string;
@@ -56,6 +58,7 @@ export interface ConversationInfo {
   groupName: string | null;
   participants: string[];
   summary: string | null;
+  currentApp: string | null;
   lastMessageAt: string;
   createdAt: string;
 }
@@ -64,4 +67,14 @@ export interface ConversationDetail {
   conversation: ConversationInfo;
   messages: Message[];
   userContext: UserContext | null;
+}
+
+export interface Event {
+  id: string;
+  conversationId: string | null;
+  userId: string | null;
+  type: string;
+  source: string;
+  payload: unknown;
+  createdAt: string;
 }

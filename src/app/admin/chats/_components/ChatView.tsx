@@ -1,6 +1,12 @@
 "use client";
 
 import { Button } from "@/src/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/src/components/ui/dropdown-menu";
 import { Input } from "@/src/components/ui/input";
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
@@ -8,14 +14,18 @@ import {
   Check,
   CheckCheck,
   Clock,
+  History,
   Loader2,
+  MessageSquare,
+  MoreVertical,
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
   Send,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useRef } from "react";
-import type { ConversationDetail, Message } from "./types";
+import type { ConversationDetail, Message, ViewMode } from "./types";
 import { formatDate, getMessageText } from "./utils";
 
 // Delivery status indicator component
@@ -81,6 +91,10 @@ interface ChatViewProps {
   onSendMessage: () => void;
   isSending: boolean;
   sendError: Error | null;
+  onDeleteConversation: () => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  eventContent?: React.ReactNode;
 }
 
 export function ChatView({
@@ -97,6 +111,10 @@ export function ChatView({
   onSendMessage,
   isSending,
   sendError,
+  onDeleteConversation,
+  viewMode,
+  onViewModeChange,
+  eventContent,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -122,19 +140,57 @@ export function ChatView({
             ` · ${conversationDetail.conversation.participants.length} participants`}
         </p>
       </div>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={onToggleContext}
-        title={showContext ? "Hide context" : "Show context"}
-        className="shrink-0"
-      >
-        {showContext ? (
-          <PanelRightClose className="w-4 h-4" />
-        ) : (
-          <PanelRightOpen className="w-4 h-4" />
-        )}
-      </Button>
+      <div className="flex items-center gap-1 shrink-0">
+        {/* View toggle */}
+        <div className="flex items-center border border-border rounded-md overflow-hidden mr-2">
+          <Button
+            variant={viewMode === "chat" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onViewModeChange("chat")}
+            className="rounded-none h-8 px-3"
+          >
+            <MessageSquare className="w-4 h-4 mr-1" />
+            Chat
+          </Button>
+          <Button
+            variant={viewMode === "events" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => onViewModeChange("events")}
+            className="rounded-none h-8 px-3"
+          >
+            <History className="w-4 h-4 mr-1" />
+            Events
+          </Button>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon">
+              <MoreVertical className="w-4 h-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={onDeleteConversation}
+              className="text-destructive focus:text-destructive"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete Conversation
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onToggleContext}
+          title={showContext ? "Hide context" : "Show context"}
+        >
+          {showContext ? (
+            <PanelRightClose className="w-4 h-4" />
+          ) : (
+            <PanelRightOpen className="w-4 h-4" />
+          )}
+        </Button>
+      </div>
     </div>
   ) : null;
 
@@ -168,6 +224,16 @@ export function ChatView({
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           Select a conversation to view messages
         </div>
+      </div>
+    );
+  }
+
+  // Event view mode
+  if (viewMode === "events") {
+    return (
+      <div className="flex-1 flex flex-col bg-card h-full overflow-hidden">
+        {header}
+        {eventContent}
       </div>
     );
   }

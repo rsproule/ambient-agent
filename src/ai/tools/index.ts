@@ -23,8 +23,9 @@ export { createGetUserContextTool } from "./getUserContext";
 export { createGroupChatSettingsTools } from "./groupChatSettings";
 export { createRequestFeatureTool } from "./requestFeature";
 export { createRequestResearchTool } from "./requestResearch";
-export { createUpdateUserContextTool } from "./updateUserContext";
 export { createScheduledJobTools } from "./scheduledJob";
+export { createSwitchAppTool } from "./switchApp";
+export { createUpdateUserContextTool } from "./updateUserContext";
 
 // Static tools (no context needed - Claude can see images directly)
 export { createImageTool } from "./createImage";

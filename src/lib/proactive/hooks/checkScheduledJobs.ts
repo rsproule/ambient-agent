@@ -93,7 +93,7 @@ async function executeScheduledJob(
 
     // Use LLM to determine if results are significant
     const analysis = await generateText({
-      model: anthropic("claude-sonnet-4-20250514"),
+      model: anthropic("claude-sonnet-4-5"),
       prompt: `You are analyzing search results for a scheduled job.
 
 Job name: "${job.name}"

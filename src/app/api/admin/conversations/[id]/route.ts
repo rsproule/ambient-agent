@@ -1,5 +1,5 @@
 /**
- * Admin API: Get single conversation with messages and context
+ * Admin API: Get/Delete single conversation
  */
 
 import prisma from "@/src/db/client";
@@ -81,6 +81,7 @@ export async function GET(
         groupName: conversation.groupName,
         participants: conversation.participants,
         summary: conversation.summary,
+        currentApp: conversation.currentApp,
         lastMessageAt: conversation.lastMessageAt,
         createdAt: conversation.createdAt,
       },
@@ -104,6 +105,34 @@ export async function GET(
     console.error("[Admin API] Error fetching conversation:", error);
     return NextResponse.json(
       { error: "Failed to fetch conversation" },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  // Check admin auth
+  const authResult = await requireAdmin();
+  if (!authResult.authorized) {
+    return authResult.error;
+  }
+
+  const { id } = await params;
+
+  try {
+    // Delete conversation (messages cascade via onDelete: Cascade)
+    await prisma.conversation.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("[Admin API] Error deleting conversation:", error);
+    return NextResponse.json(
+      { error: "Failed to delete conversation" },
       { status: 500 },
     );
   }

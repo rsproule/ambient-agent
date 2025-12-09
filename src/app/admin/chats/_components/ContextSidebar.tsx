@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/src/components/ui/badge";
-import { FileText } from "lucide-react";
+import { AppWindow, FileText } from "lucide-react";
 import type { ConversationDetail, UserContextDocument } from "./types";
 
 interface ContextSidebarProps {
@@ -65,6 +65,28 @@ export function ContextSidebar({
                 <p className="mt-1 text-foreground">
                   {conversationDetail.conversation.summary}
                 </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Active App */}
+        <div>
+          <h4 className="text-sm font-medium text-foreground mb-2">
+            Foreground App
+          </h4>
+          <div className="bg-muted rounded-lg p-3 text-xs">
+            {conversationDetail.conversation.currentApp ? (
+              <div className="flex items-center gap-2">
+                <AppWindow className="w-4 h-4 text-primary" />
+                <Badge variant="default" className="text-xs">
+                  {conversationDetail.conversation.currentApp}
+                </Badge>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <AppWindow className="w-4 h-4" />
+                <span>Default (no app active)</span>
               </div>
             )}
           </div>
@@ -151,7 +173,9 @@ export function ContextSidebar({
                       >
                         <div className="flex items-center gap-2">
                           <FileText className="w-3 h-3 text-muted-foreground shrink-0" />
-                          <div className="font-medium truncate">{doc.title}</div>
+                          <div className="font-medium truncate">
+                            {doc.title}
+                          </div>
                         </div>
                         <div className="text-muted-foreground mt-1">
                           Source: {doc.source}

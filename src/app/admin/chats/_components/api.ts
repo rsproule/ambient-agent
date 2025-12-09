@@ -1,6 +1,6 @@
 // API functions for admin chats
 
-import type { ConversationDetail, ConversationListItem } from "./types";
+import type { ConversationDetail, ConversationListItem, Event } from "./types";
 
 export async function fetchConversations(): Promise<ConversationListItem[]> {
   const res = await fetch("/api/admin/conversations");
@@ -104,4 +104,30 @@ export async function checkMessageStatus(
     throw new Error(data.error || "Failed to check message status");
   }
   return response.json();
+}
+
+export async function deleteConversation(
+  conversationId: string,
+): Promise<void> {
+  const res = await fetch(`/api/admin/conversations/${conversationId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "Failed to delete conversation");
+  }
+}
+
+export async function fetchConversationEvents(
+  conversationId: string,
+): Promise<Event[]> {
+  const res = await fetch(`/api/admin/conversations/${conversationId}/events`);
+  if (!res.ok) {
+    if (res.status === 401) throw new Error("Unauthorized");
+    if (res.status === 403)
+      throw new Error("Forbidden - Admin access required");
+    throw new Error("Failed to fetch events");
+  }
+  const data = await res.json();
+  return data.events || [];
 }

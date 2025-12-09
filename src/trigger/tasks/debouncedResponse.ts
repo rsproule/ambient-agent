@@ -74,15 +74,13 @@ const TOOL_LOADING_MESSAGES: Record<string, string[]> = {
     "checking your reminders...",
     "looking at scheduled items...",
   ],
-
-  // Default fallback
-  _default: ["one sec...", "let me check...", "working on it..."],
 };
 
 /**
  * Get a random loading message for the given tools
+ * Returns null if no specific message is defined (no loading message will be sent)
  */
-function getLoadingMessage(toolNames: string[]): string {
+function getLoadingMessage(toolNames: string[]): string | null {
   // Try to find a specific message for the first tool
   for (const toolName of toolNames) {
     const messages = TOOL_LOADING_MESSAGES[toolName];
@@ -90,9 +88,8 @@ function getLoadingMessage(toolNames: string[]): string {
       return messages[Math.floor(Math.random() * messages.length)];
     }
   }
-  // Fall back to default messages
-  const defaultMessages = TOOL_LOADING_MESSAGES._default;
-  return defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+  // No message defined for these tools - don't send a loading message
+  return null;
 }
 
 type DebouncedResponsePayload = {
@@ -176,6 +173,15 @@ export const debouncedResponse = task({
     try {
       const onToolsInvoked = async (toolNames: string[]) => {
         const loadingMessage = getLoadingMessage(toolNames);
+
+        // If no loading message is defined for these tools, skip sending
+        if (!loadingMessage) {
+          log.debug("No loading message defined for tools", {
+            tools: toolNames,
+          });
+          return;
+        }
+
         log.info("Sending tool notification", {
           message: loadingMessage,
           tools: toolNames,

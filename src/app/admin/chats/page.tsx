@@ -9,15 +9,21 @@ import {
   ChatView,
   ContextSidebar,
   ConversationList,
+  deleteConversation,
+  DeleteConversationDialog,
   deleteMessage,
   DocumentDialog,
+  EventView,
   fetchConversation,
+  fetchConversationEvents,
   fetchConversations,
   MessageDetailsDialog,
   retryMessage,
   sendMessage,
+  type ConversationInfo,
   type Message,
   type UserContextDocument,
+  type ViewMode,
 } from "./_components";
 
 // Loading fallback for Suspense
@@ -60,7 +66,10 @@ function AdminChatsContent() {
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
   const [selectedDocument, setSelectedDocument] =
     useState<UserContextDocument | null>(null);
+  const [conversationToDelete, setConversationToDelete] =
+    useState<ConversationInfo | null>(null);
   const [showContext, setShowContext] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>("chat");
   const queryClient = useQueryClient();
 
   // Update URL when selecting a conversation
@@ -82,7 +91,7 @@ function AdminChatsContent() {
     queryFn: fetchConversations,
   });
 
-  // Fetch selected conversation details (poll every 5 seconds)
+  // Fetch selected conversation details (poll every 2 seconds)
   const {
     data: conversationDetail,
     isLoading: loadingDetail,
@@ -92,6 +101,18 @@ function AdminChatsContent() {
     queryFn: () => fetchConversation(selectedConvoId!),
     enabled: !!selectedConvoId,
     refetchInterval: 2000,
+  });
+
+  // Fetch events when in event view mode
+  const {
+    data: events,
+    isLoading: loadingEvents,
+    error: eventsError,
+  } = useQuery({
+    queryKey: ["admin-conversation-events", selectedConvoId],
+    queryFn: () => fetchConversationEvents(selectedConvoId!),
+    enabled: !!selectedConvoId && viewMode === "events",
+    refetchInterval: 5000,
   });
 
   // Delete message mutation
@@ -130,6 +151,16 @@ function AdminChatsContent() {
           queryKey: ["admin-conversation", selectedConvoId],
         });
       }, 1000);
+    },
+  });
+
+  // Delete conversation mutation
+  const deleteConversationMutation = useMutation({
+    mutationFn: deleteConversation,
+    onSuccess: () => {
+      setConversationToDelete(null);
+      setSelectedConvoId(null);
+      queryClient.invalidateQueries({ queryKey: ["admin-conversations"] });
     },
   });
 
@@ -174,6 +205,19 @@ function AdminChatsContent() {
             onSendMessage={handleSendMessage}
             isSending={sendMessageMutation.isPending}
             sendError={sendMessageMutation.error}
+            onDeleteConversation={() =>
+              conversationDetail &&
+              setConversationToDelete(conversationDetail.conversation)
+            }
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            eventContent={
+              <EventView
+                events={events}
+                isLoading={loadingEvents}
+                error={eventsError}
+              />
+            }
           />
 
           {/* Right Sidebar - Context */}
@@ -199,6 +243,14 @@ function AdminChatsContent() {
         <DocumentDialog
           document={selectedDocument}
           onClose={() => setSelectedDocument(null)}
+        />
+
+        {/* Delete Conversation Dialog */}
+        <DeleteConversationDialog
+          conversation={conversationToDelete}
+          onClose={() => setConversationToDelete(null)}
+          onConfirm={(id) => deleteConversationMutation.mutate(id)}
+          isDeleting={deleteConversationMutation.isPending}
         />
       </div>
     </div>
