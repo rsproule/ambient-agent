@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "prisma generate"
@@ -48,7 +48,7 @@
     "embla-carousel-react": "^8.6.0",
     "googleapis": "^166.0.0",
     "lucide-react": "^0.555.0",
-    "next": "15.1.7",
+    "next": "16.0.7",
     "next-auth": "5.0.0-beta.30",
     "pg": "^8.16.3",
     "prisma": "^6.19.0",
