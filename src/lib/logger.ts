@@ -16,8 +16,15 @@ const devFormat = printf(({ level, message, timestamp, ...meta }) => {
   const contextPrefix =
     contextParts.length > 0 ? `[${contextParts.join("][")}] ` : "";
 
-  // Format additional data if present
-  const { msgId, groupId, sender, conversationId, component, ...rest } = meta;
+  // Format additional data if present (destructure context fields to exclude from rest)
+  const {
+    msgId: _msgId,
+    groupId: _groupId,
+    sender: _sender,
+    conversationId: _conversationId,
+    component: _component,
+    ...rest
+  } = meta;
   const extraData =
     Object.keys(rest).length > 0 ? ` ${JSON.stringify(rest)}` : "";
 

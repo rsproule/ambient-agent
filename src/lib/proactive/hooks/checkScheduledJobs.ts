@@ -6,13 +6,13 @@
 
 import {
   getDueScheduledJobsForUser,
-  updateJobAfterRun,
   markJobFailed,
+  updateJobAfterRun,
   type ScheduledJob,
 } from "@/src/db/scheduledJob";
+import { anthropic } from "@ai-sdk/anthropic";
 import { perplexity } from "@ai-sdk/perplexity";
 import { generateObject, generateText } from "ai";
-import { anthropic } from "@ai-sdk/anthropic";
 import { z } from "zod";
 import type { HookContext, HookResult } from "../types";
 
@@ -61,7 +61,7 @@ async function simpleWebSearch(
  */
 async function executeScheduledJob(
   job: ScheduledJob,
-  _context: HookContext,
+  _context: HookContext, // eslint-disable-line @typescript-eslint/no-unused-vars
 ): Promise<{
   success: boolean;
   result?: string;
@@ -85,7 +85,9 @@ async function executeScheduledJob(
     const resultsText = searchResults.results
       .map(
         (r: SearchResult, i: number) =>
-          `[${i + 1}] ${r.title}\n${r.snippet}${r.url ? `\nSource: ${r.url}` : ""}`,
+          `[${i + 1}] ${r.title}\n${r.snippet}${
+            r.url ? `\nSource: ${r.url}` : ""
+          }`,
       )
       .join("\n\n");
 
@@ -101,7 +103,11 @@ Search results:
 ${resultsText}
 
 Previous result (for comparison):
-${job.lastResult ? JSON.stringify(job.lastResult) : "None - this is the first run"}
+${
+  job.lastResult
+    ? JSON.stringify(job.lastResult)
+    : "None - this is the first run"
+}
 
 Analyze these results and determine:
 1. Is there anything new/significant worth sharing with the user?
@@ -115,8 +121,9 @@ SIGNIFICANT: [yes/no]
 SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
     });
 
-    const isSignificant =
-      analysis.text.toLowerCase().includes("significant: yes");
+    const isSignificant = analysis.text
+      .toLowerCase()
+      .includes("significant: yes");
     const summaryMatch = analysis.text.match(/SUMMARY:\s*([\s\S]+)/i);
     const summary = summaryMatch
       ? summaryMatch[1].trim()
@@ -128,7 +135,10 @@ SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
       isSignificant,
     };
   } catch (error) {
-    console.error(`[executeScheduledJob] Error executing job ${job.id}:`, error);
+    console.error(
+      `[executeScheduledJob] Error executing job ${job.id}:`,
+      error,
+    );
     return {
       success: false,
       isSignificant: false,
@@ -159,7 +169,9 @@ export async function checkScheduledJobs(
     }> = [];
 
     for (const job of dueJobs) {
-      console.log(`[checkScheduledJobs] Executing job: ${job.name} (${job.id})`);
+      console.log(
+        `[checkScheduledJobs] Executing job: ${job.name} (${job.id})`,
+      );
 
       const execution = await executeScheduledJob(job, context);
 
@@ -224,4 +236,3 @@ export async function checkScheduledJobs(
     return { shouldNotify: false };
   }
 }
-
