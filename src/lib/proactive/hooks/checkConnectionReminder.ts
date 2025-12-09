@@ -14,6 +14,7 @@ import type { HookContext, HookResult } from "../types";
  */
 export async function checkConnectionReminder(
   context: HookContext,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _reminderDays: number = 7,
 ): Promise<HookResult> {
   // Skip if user has any connections

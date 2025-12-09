@@ -1,41 +1,40 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { ImageToolType } from "./tool"
-import { type ImageInput, type ImageItem } from "./schema"
-import { Loader } from "@/src/components/loader"
-import { Badge } from "@/src/components/ui/badge"
-import { cn } from "@/src/lib/utils"
+import { Loader } from "@/src/components/loader";
+import { Badge } from "@/src/components/ui/badge";
+import { cn } from "@/src/lib/utils";
+import * as React from "react";
+import { ImageToolType } from "./tool";
 
-import { Skeleton } from "@/src/components/ui/skeleton"
-import { Card, CardContent, CardHeader } from "@/src/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/src/components/ui/card";
+import { Skeleton } from "@/src/components/ui/skeleton";
 
 export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
-  const part = invocation
-  const desiredCount = Math.max(1, Math.min(4, part.input?.n ?? 3))
-  const desiredAR = part.input?.aspectRatio ?? "1:1"
+  const part = invocation;
+  const desiredCount = Math.max(1, Math.min(4, part.input?.n ?? 3));
+  const desiredAR = part.input?.aspectRatio ?? "1:1";
 
   const cardBaseClass =
-    "not-prose flex w-full flex-col gap-0 overflow-hidden border border-border/50 bg-background/95 py-0 text-foreground shadow-sm"
+    "not-prose flex w-full flex-col gap-0 overflow-hidden border border-border/50 bg-background/95 py-0 text-foreground shadow-sm";
   const headerBaseClass =
-    "flex flex-col gap-2 border-b border-border/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
-  const contentBaseClass = "px-6 py-5"
+    "flex flex-col gap-2 border-b border-border/50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between";
+  const contentBaseClass = "px-6 py-5";
 
   const toAspectRatio = (s: string) => {
-    const parts = s.split(":")
-    if (parts.length === 2) return `${parts[0]} / ${parts[1]}`
-    return "1 / 1"
-  }
+    const parts = s.split(":");
+    if (parts.length === 2) return `${parts[0]} / ${parts[1]}`;
+    return "1 / 1";
+  };
 
   const gridColsForCount = (count: number) => {
-    if (count <= 1) return "grid-cols-1"
-    if (count === 2) return "grid-cols-1 sm:grid-cols-2"
-    if (count === 3) return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-    return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4"
-  }
+    if (count <= 1) return "grid-cols-1";
+    if (count === 2) return "grid-cols-1 sm:grid-cols-2";
+    if (count === 3) return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3";
+    return "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4";
+  };
 
   const renderPlaceholderTiles = (count: number, aspect: string) => {
-    const ratio = toAspectRatio(aspect)
+    const ratio = toAspectRatio(aspect);
 
     return Array.from({ length: count }).map((_, i) => (
       <div
@@ -46,20 +45,20 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
         <Skeleton className="absolute inset-0 h-full w-full" />
         <div className="absolute inset-0 bg-linear-to-br from-foreground/5 via-transparent to-transparent" />
       </div>
-    ))
-  }
+    ));
+  };
 
   const renderHeader = (
     title: React.ReactNode,
     description?: React.ReactNode,
-    actions?: React.ReactNode
+    actions?: React.ReactNode,
   ) => {
     const descriptionNode =
       typeof description === "string" ? (
         <p className="text-xs text-muted-foreground">{description}</p>
       ) : (
-        (description ?? null)
-      )
+        description ?? null
+      );
 
     return (
       <CardHeader className={headerBaseClass}>
@@ -79,8 +78,8 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
           </div>
         ) : null}
       </CardHeader>
-    )
-  }
+    );
+  };
 
   if (part.state === "input-streaming") {
     return (
@@ -95,7 +94,7 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (part.state === "input-available") {
@@ -111,7 +110,7 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
 
   if (part.state === "output-error") {
@@ -121,7 +120,7 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
         <CardContent
           className={cn(
             contentBaseClass,
-            "space-y-4 text-sm text-muted-foreground"
+            "space-y-4 text-sm text-muted-foreground",
           )}
         >
           <div className={`grid gap-4 ${gridColsForCount(desiredCount)}`}>
@@ -132,16 +131,16 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
           </div>
         </CardContent>
       </Card>
-    )
+    );
   }
-  if (!part.output) return null
-  const { images, provider, prompt, aspectRatio } = part.output
-  const ar = part.input?.aspectRatio ?? aspectRatio ?? "1:1"
+  if (!part.output) return null;
+  const { images, provider, prompt, aspectRatio } = part.output;
+  const ar = part.input?.aspectRatio ?? aspectRatio ?? "1:1";
 
   // Render exactly the number of generated images, capped by desiredCount
-  const displayCount = Math.min(images.length, desiredCount)
-  const selectedImages = images.slice(0, displayCount)
-  const gridCols = gridColsForCount(displayCount)
+  const displayCount = Math.min(images.length, desiredCount);
+  const selectedImages = images.slice(0, displayCount);
+  const gridCols = gridColsForCount(displayCount);
 
   return (
     <Card className={cn(cardBaseClass, "max-w-xl animate-in fade-in-50")}>
@@ -150,7 +149,7 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
         prompt ? `“${prompt}”` : undefined,
         <Badge variant="secondary" className="rounded-full">
           {provider}
-        </Badge>
+        </Badge>,
       )}
       <CardContent className={cn(contentBaseClass, "pb-6")}>
         <div className={`grid ${gridCols} gap-4`}>
@@ -158,14 +157,15 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
             const src = img?.url
               ? img.url
               : img?.base64
-                ? `data:${img.mimeType || "image/png"};base64,${img.base64}`
-                : ""
+              ? `data:${img.mimeType || "image/png"};base64,${img.base64}`
+              : "";
             return (
               <div
                 key={src || `ph-${i}`}
                 className="w-full overflow-hidden rounded-xl border border-border/50 bg-background"
                 style={{ aspectRatio: toAspectRatio(ar) }}
               >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={src}
                   alt={prompt ?? "Generated image"}
@@ -173,12 +173,12 @@ export function ImageGrid({ invocation }: { invocation: ImageToolType }) {
                   loading="lazy"
                 />
               </div>
-            )
+            );
           })}
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 
-export default ImageGrid
+export default ImageGrid;

@@ -33,6 +33,7 @@ export function MessageDetailsDialog({
   isRetrying,
 }: MessageDetailsDialogProps) {
   const [loopStatus, setLoopStatus] = useState<LoopMessageStatus | null>(null);
+  const [trackedMessageId, setTrackedMessageId] = useState(message?.id);
 
   const checkStatusMutation = useMutation({
     mutationFn: checkMessageStatus,
@@ -41,12 +42,15 @@ export function MessageDetailsDialog({
     },
   });
 
-  // Auto-fetch status when message changes (for assistant messages with messageId)
-  useEffect(() => {
+  // Reset state when message changes (derived state pattern)
+  if (trackedMessageId !== message?.id) {
+    setTrackedMessageId(message?.id);
     setLoopStatus(null);
     checkStatusMutation.reset();
+  }
 
-    // Auto-fetch if this is an assistant message with a LoopMessage ID
+  // Auto-fetch status for assistant messages with messageId
+  useEffect(() => {
     if (message?.role === "assistant" && message?.messageId) {
       checkStatusMutation.mutate(message.id);
     }

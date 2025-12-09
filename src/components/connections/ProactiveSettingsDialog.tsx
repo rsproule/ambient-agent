@@ -10,9 +10,12 @@ import {
 } from "@/src/components/ui/dialog";
 import { Label } from "@/src/components/ui/label";
 import { Switch } from "@/src/components/ui/switch";
-import { DEFAULT_HOOK_SCHEDULES, type HookName } from "@/src/lib/proactive/types";
+import {
+  DEFAULT_HOOK_SCHEDULES,
+  type HookName,
+} from "@/src/lib/proactive/types";
 import { Calendar, Github, Mail } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface HookSettings {
   enabled: boolean;
@@ -77,7 +80,7 @@ export function ProactiveSettingsDialog({
 }: ProactiveSettingsDialogProps) {
   // Get hooks relevant to this provider
   const relevantHooks = PROVIDER_HOOKS[providerId] || [];
-  
+
   const [hookSettings, setHookSettings] = useState<HookSettingsMap>(() => {
     const initial: HookSettingsMap = {};
     for (const hook of relevantHooks) {
@@ -91,14 +94,7 @@ export function ProactiveSettingsDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch current settings
-  useEffect(() => {
-    if (open) {
-      fetchSettings();
-    }
-  }, [open]);
-
-  const fetchSettings = async () => {
+  const fetchSettings = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await fetch(`/api/connections/settings`);
@@ -125,7 +121,14 @@ export function ProactiveSettingsDialog({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [relevantHooks]);
+
+  // Fetch current settings
+  useEffect(() => {
+    if (open) {
+      fetchSettings();
+    }
+  }, [open, fetchSettings]);
 
   const handleToggleHook = (hook: HookName) => {
     setHookSettings((prev) => ({
@@ -200,7 +203,7 @@ export function ProactiveSettingsDialog({
                 {relevantHooks.map((hook) => {
                   const config = HOOK_CONFIG[hook];
                   if (!config) return null;
-                  
+
                   const Icon = config.icon;
                   const settings = hookSettings[hook];
                   if (!settings) return null;
@@ -226,7 +229,10 @@ export function ProactiveSettingsDialog({
                             <select
                               value={settings.cooldownMinutes}
                               onChange={(e) =>
-                                handleCooldownChange(hook, Number(e.target.value))
+                                handleCooldownChange(
+                                  hook,
+                                  Number(e.target.value),
+                                )
                               }
                               className="mt-2 text-xs border rounded px-2 py-1 bg-background"
                             >
