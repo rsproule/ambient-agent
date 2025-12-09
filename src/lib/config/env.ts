@@ -43,6 +43,10 @@ const envSchema = z.object({
   // Blockchain configuration
   NEXT_PUBLIC_BASE_RPC_URL: z.string().url().optional(),
 
+  // Payout wallet configuration (for USDC transfers)
+  PAYOUT_WALLET_PRIVATE_KEY: z.string().optional(),
+  PAYOUT_WALLET_ADDRESS: z.string().optional(),
+
   // Node environment
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -151,6 +155,15 @@ export const privyConfig = {
 export const blockchainConfig = {
   get baseRpcUrl() {
     return env.NEXT_PUBLIC_BASE_RPC_URL;
+  },
+};
+
+export const payoutConfig = {
+  get privateKey() {
+    return env.PAYOUT_WALLET_PRIVATE_KEY;
+  },
+  get walletAddress() {
+    return env.PAYOUT_WALLET_ADDRESS;
   },
 };
 

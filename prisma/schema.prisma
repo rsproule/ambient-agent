@@ -67,6 +67,7 @@ model User {
   email                  String?        @unique // Optional email
   emailVerified          DateTime? // For NextAuth
   image                  String? // Profile image URL
+  walletAddress          String? // Privy embedded wallet address for payouts
   isAdmin                Boolean        @default(false) // Admin access for admin routes
   outboundOptIn          Boolean? // null = not asked, true = opted in, false = opted out
   hasCompletedOnboarding Boolean        @default(false) // Whether user has completed the onboarding flow
@@ -402,4 +403,35 @@ model NegotiationApp {
 
   @@index([conversationId])
   @@index([userId])
+}
+
+// ============================================
+// Negotiation Offers & Payouts
+// ============================================
+
+model NegotiationOffer {
+  id             String   @id @default(cuid())
+  conversationId String
+  userId         String
+  amount         Decimal  @db.Decimal(10, 2)
+  status         String   @default("pending") // pending, accepted, rejected, expired
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId])
+  @@index([userId])
+}
+
+model Payout {
+  id            String    @id @default(cuid())
+  userId        String    @unique // Enforce single payout per user
+  offerId       String    @unique
+  amount        Decimal   @db.Decimal(10, 2)
+  walletAddress String
+  txHash        String?
+  status        String    @default("pending") // pending, completed, failed
+  error         String?   @db.Text
+  createdAt     DateTime  @default(now())
+  completedAt   DateTime?
+
+  @@index([status])
 }

@@ -38,6 +38,12 @@ export const negotiationApp: AppDefinition = {
     "calendar_list_events",
     "calendar_get_today",
     "calendar_get_week",
+    // Negotiation tools (context-bound, injected by respondToMessage)
+    "getBankroll",
+    "makeOffer",
+    "finalizeNegotiation",
+    // Onboarding completion
+    "completeOnboarding",
   ],
 
   systemPrompt: NEGOTIATION_PROMPT,
