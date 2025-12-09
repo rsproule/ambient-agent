@@ -78,3 +78,15 @@ export interface Event {
   payload: unknown;
   createdAt: string;
 }
+
+export interface PaginatedEvents {
+  events: Event[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface PaginatedMessages {
+  messages: Message[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}

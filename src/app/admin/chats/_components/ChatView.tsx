@@ -79,6 +79,7 @@ function DeliveryStatusIcon({
 
 interface ChatViewProps {
   conversationDetail: ConversationDetail | undefined;
+  messages: Message[];
   isLoading: boolean;
   error: Error | null;
   showContext: boolean;
@@ -94,11 +95,15 @@ interface ChatViewProps {
   onDeleteConversation: () => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
+  onLoadMoreMessages?: () => void;
+  hasMoreMessages?: boolean;
+  isLoadingMoreMessages?: boolean;
   eventContent?: React.ReactNode;
 }
 
 export function ChatView({
   conversationDetail,
+  messages,
   isLoading,
   error,
   showContext,
@@ -114,16 +119,35 @@ export function ChatView({
   onDeleteConversation,
   viewMode,
   onViewModeChange,
+  onLoadMoreMessages,
+  hasMoreMessages,
+  isLoadingMoreMessages,
   eventContent,
 }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when messages load or change
+  // Scroll to bottom when messages load, change, or view mode switches
   useEffect(() => {
-    if (conversationDetail?.messages) {
+    if (messages.length > 0 && viewMode === "chat") {
       messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
     }
-  }, [conversationDetail?.messages]);
+  }, [messages.length, viewMode]);
+
+  // Handle scroll to load more messages
+  const handleScroll = () => {
+    if (
+      !messagesContainerRef.current ||
+      !hasMoreMessages ||
+      isLoadingMoreMessages
+    )
+      return;
+    const { scrollTop } = messagesContainerRef.current;
+    // Load more when scrolled near the top (older messages)
+    if (scrollTop < 100 && onLoadMoreMessages) {
+      onLoadMoreMessages();
+    }
+  };
 
   // Header with toggle button (shown in all states when conversation exists)
   const header = conversationDetail ? (
@@ -243,8 +267,27 @@ export function ChatView({
       {header}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {conversationDetail.messages.map((msg) => (
+      <div
+        ref={messagesContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto p-4 space-y-3"
+      >
+        {/* Load more indicator */}
+        {hasMoreMessages && (
+          <div className="flex justify-center py-2">
+            {isLoadingMoreMessages ? (
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            ) : (
+              <button
+                onClick={onLoadMoreMessages}
+                className="text-sm text-muted-foreground hover:text-foreground"
+              >
+                Load older messages
+              </button>
+            )}
+          </div>
+        )}
+        {messages.map((msg) => (
           <div
             key={msg.id}
             className={`flex ${

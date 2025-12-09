@@ -1,8 +1,13 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { Skeleton } from "@/src/components/ui/skeleton";
 import {
@@ -16,6 +21,7 @@ import {
   EventView,
   fetchConversation,
   fetchConversationEvents,
+  fetchConversationMessages,
   fetchConversations,
   MessageDetailsDialog,
   retryMessage,
@@ -91,7 +97,7 @@ function AdminChatsContent() {
     queryFn: fetchConversations,
   });
 
-  // Fetch selected conversation details (poll every 2 seconds)
+  // Fetch selected conversation details (metadata only, not messages)
   const {
     data: conversationDetail,
     isLoading: loadingDetail,
@@ -100,20 +106,60 @@ function AdminChatsContent() {
     queryKey: ["admin-conversation", selectedConvoId],
     queryFn: () => fetchConversation(selectedConvoId!),
     enabled: !!selectedConvoId,
-    refetchInterval: 2000,
+    refetchInterval: 5000,
   });
 
-  // Fetch events when in event view mode
+  // Fetch messages with infinite scroll (paginated)
   const {
-    data: events,
+    data: messagesData,
+    isLoading: loadingMessages,
+    error: messagesError,
+    fetchNextPage: fetchMoreMessages,
+    hasNextPage: hasMoreMessages,
+    isFetchingNextPage: isFetchingMoreMessages,
+  } = useInfiniteQuery({
+    queryKey: ["admin-conversation-messages", selectedConvoId],
+    queryFn: ({ pageParam }) =>
+      fetchConversationMessages(selectedConvoId!, pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
+    enabled: !!selectedConvoId && viewMode === "chat",
+    refetchInterval: 3000,
+  });
+
+  // Flatten messages from all pages (reverse to show oldest first)
+  const messages = useMemo(() => {
+    if (!messagesData?.pages) return [];
+    // Pages are newest-first, messages within pages are newest-first
+    // We need to reverse both to get chronological order
+    return messagesData.pages
+      .flatMap((page) => page.messages)
+      .reverse();
+  }, [messagesData]);
+
+  // Fetch events with infinite scroll (paginated)
+  const {
+    data: eventsData,
     isLoading: loadingEvents,
     error: eventsError,
-  } = useQuery({
+    fetchNextPage: fetchMoreEvents,
+    hasNextPage: hasMoreEvents,
+    isFetchingNextPage: isFetchingMoreEvents,
+  } = useInfiniteQuery({
     queryKey: ["admin-conversation-events", selectedConvoId],
-    queryFn: () => fetchConversationEvents(selectedConvoId!),
+    queryFn: ({ pageParam }) =>
+      fetchConversationEvents(selectedConvoId!, pageParam),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    initialPageParam: undefined as string | undefined,
     enabled: !!selectedConvoId && viewMode === "events",
     refetchInterval: 5000,
   });
+
+  // Flatten events from all pages
+  const events = useMemo(() => {
+    if (!eventsData?.pages) return [];
+    return eventsData.pages.flatMap((page) => page.events);
+  }, [eventsData]);
 
   // Delete message mutation
   const deleteMutation = useMutation({
@@ -193,8 +239,9 @@ function AdminChatsContent() {
           {/* Chat Area */}
           <ChatView
             conversationDetail={conversationDetail}
-            isLoading={!!selectedConvoId && loadingDetail}
-            error={detailError}
+            messages={messages}
+            isLoading={!!selectedConvoId && (loadingDetail || loadingMessages)}
+            error={detailError || messagesError}
             showContext={showContext}
             onToggleContext={() => setShowContext(!showContext)}
             onMessageClick={setSelectedMessage}
@@ -211,11 +258,17 @@ function AdminChatsContent() {
             }
             viewMode={viewMode}
             onViewModeChange={setViewMode}
+            onLoadMoreMessages={() => fetchMoreMessages()}
+            hasMoreMessages={hasMoreMessages}
+            isLoadingMoreMessages={isFetchingMoreMessages}
             eventContent={
               <EventView
                 events={events}
                 isLoading={loadingEvents}
                 error={eventsError}
+                onLoadMore={() => fetchMoreEvents()}
+                hasMore={hasMoreEvents}
+                isLoadingMore={isFetchingMoreEvents}
               />
             }
           />

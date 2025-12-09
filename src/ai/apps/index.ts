@@ -4,7 +4,7 @@
  * Apps are self-contained modules with their own agent, state, and behavior.
  */
 
-export type { AppDefinition } from "./types";
+export { negotiationApp } from "./negotiation";
 export {
   appExists,
   getAllAppIds,
@@ -12,4 +12,4 @@ export {
   getApp,
   getAppForContext,
 } from "./registry";
-export { negotiationApp } from "./negotiation";
+export type { AppDefinition } from "./types";

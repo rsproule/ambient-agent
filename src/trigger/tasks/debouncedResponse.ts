@@ -10,6 +10,7 @@ import {
 import { createContextLogger } from "@/src/lib/logger";
 import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
 import { task, wait } from "@trigger.dev/sdk/v3";
+import { logTaskCompleted, logTaskFailed, logTaskStarted } from "../taskEvents";
 import { handleMessageResponse } from "./handleMessage";
 
 // Create LoopMessage client for sending quick notifications
@@ -109,12 +110,26 @@ export const debouncedResponse = task({
     const taskId = ctx.run.id;
     const isGroup = !!payload.group;
     const sender = isGroup ? payload.recipient : undefined;
+    const startTime = performance.now();
+
+    const taskCtx = {
+      taskId,
+      taskName: "debounced-response",
+      conversationId: payload.conversationId,
+      userId: sender,
+    };
 
     const log = createContextLogger({
       component: "debouncedResponse",
       conversationId: payload.conversationId,
       groupId: payload.group,
       sender,
+    });
+
+    // Log task started
+    await logTaskStarted(taskCtx, {
+      isGroup,
+      isNewUser: payload.isNewUser,
     });
 
     // Wait 1 second (debounce period) to batch rapid messages
@@ -132,10 +147,9 @@ export const debouncedResponse = task({
 
     if (messages.length === 0) {
       log.info("No messages found");
-      return {
-        skipped: true,
-        reason: "no_messages",
-      };
+      const result = { skipped: true, reason: "no_messages" };
+      await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+      return result;
     }
 
     // Override sender from task context to ensure correct tool authentication in group chats
@@ -217,7 +231,9 @@ export const debouncedResponse = task({
       // Check if we were aborted (superseded by newer task)
       if (abortController.signal.aborted) {
         log.info("Generation aborted (superseded)");
-        return { skipped: true, reason: "superseded" };
+        const result = { skipped: true, reason: "superseded" };
+        await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+        return result;
       }
 
       if (actions.length === 0) {
@@ -238,7 +254,13 @@ export const debouncedResponse = task({
           sender,
           isGroup,
         );
-        return { success: true, actionsExecuted: 0, noResponseNeeded: true };
+        const result = {
+          success: true,
+          actionsExecuted: 0,
+          noResponseNeeded: true,
+        };
+        await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+        return result;
       }
 
       await handleMessageResponse.triggerAndWait({
@@ -251,13 +273,20 @@ export const debouncedResponse = task({
         isGroup,
       });
 
-      return { success: true, actionsExecuted: actions.length };
+      const result = { success: true, actionsExecuted: actions.length };
+      await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+      return result;
     } catch (error) {
       await releaseResponseLock(
         payload.conversationId,
         taskId,
         sender,
         isGroup,
+      );
+      await logTaskFailed(
+        taskCtx,
+        error instanceof Error ? error : String(error),
+        performance.now() - startTime,
       );
       throw error;
     }

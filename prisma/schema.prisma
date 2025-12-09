@@ -369,7 +369,7 @@ model FeatureRequest {
 // ============================================
 
 model Event {
-  id             String   @id @default(cuid())
+  id             String  @id @default(cuid())
   conversationId String?
   userId         String?
 
@@ -393,9 +393,9 @@ model NegotiationApp {
   conversationId String @unique
   userId         String
 
-  currentQuote   Decimal? @db.Decimal(10, 2)
-  researchNotes  String?  @db.Text
-  status         String   @default("researching") // researching, negotiating, agreed, completed
+  currentQuote  Decimal? @db.Decimal(10, 2)
+  researchNotes String?  @db.Text
+  status        String   @default("researching") // researching, negotiating, agreed, completed
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

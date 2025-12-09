@@ -4,8 +4,8 @@
  * Append-only event log for debugging, analytics, and audit trails.
  */
 
-import prisma from "./client";
 import logger from "@/src/lib/logger";
+import prisma from "./client";
 
 export type EventType =
   | "message_in"
@@ -49,7 +49,7 @@ export async function logEvent({
         userId,
         type,
         source,
-        payload,
+        payload: payload as object,
       },
     });
   } catch (error) {

@@ -7,15 +7,20 @@
 
 import { mrWhiskersAgent } from "@/src/ai/agents/mrWhiskers";
 import { respondToMessage } from "@/src/ai/respondToMessage";
+import prisma from "@/src/db/client";
+import { getUserConnections } from "@/src/db/connection";
 import type { ConversationContext } from "@/src/db/conversation";
-import { getScheduledJob, markJobFailed, updateJobAfterRun } from "@/src/db/scheduledJob";
+import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
+import {
+  getScheduledJob,
+  markJobFailed,
+  updateJobAfterRun,
+} from "@/src/db/scheduledJob";
 import { getPhoneNumberForUser } from "@/src/db/user";
 import { getUserContextByPhone } from "@/src/db/userContext";
-import { getUserConnections } from "@/src/db/connection";
-import { getGroupChatCustomPrompt } from "@/src/db/groupChatSettings";
-import prisma from "@/src/db/client";
 import { task } from "@trigger.dev/sdk/v3";
 import type { ModelMessage } from "ai";
+import { logTaskCompleted, logTaskFailed, logTaskStarted } from "../taskEvents";
 import { handleMessageResponse } from "./handleMessage";
 
 type RunScheduledJobPayload = {
@@ -58,7 +63,9 @@ async function buildScheduledJobContext(
     try {
       context.groupParticipants = await Promise.all(
         conversation.participants.map(async (participantPhone) => {
-          const participantContext = await getUserContextByPhone(participantPhone);
+          const participantContext = await getUserContextByPhone(
+            participantPhone,
+          );
           const user = await prisma.user.findUnique({
             where: { phoneNumber: participantPhone },
             select: { name: true },
@@ -78,7 +85,9 @@ async function buildScheduledJobContext(
         }),
       );
 
-      context.groupChatCustomPrompt = await getGroupChatCustomPrompt(job.conversationId);
+      context.groupChatCustomPrompt = await getGroupChatCustomPrompt(
+        job.conversationId,
+      );
     } catch (error) {
       console.warn(`[RunScheduledJob] Failed to fetch group info:`, error);
     }
@@ -121,7 +130,8 @@ async function buildScheduledJobContext(
           (c) => c.provider === "google_calendar" && c.status === "connected",
         );
 
-        const timezone = job.timezone || userContext?.timezone || "America/Los_Angeles";
+        const timezone =
+          job.timezone || userContext?.timezone || "America/Los_Angeles";
         const now = new Date();
 
         context.systemState = {
@@ -148,7 +158,8 @@ async function buildScheduledJobContext(
             github: githubConnected,
             calendar: calendarConnected,
           },
-          hasAnyConnection: gmailConnected || githubConnected || calendarConnected,
+          hasAnyConnection:
+            gmailConnected || githubConnected || calendarConnected,
           researchStatus: userContext ? "completed" : "none",
           outboundOptIn: user.outboundOptIn,
           timezoneSource: timezone ? "known" : "default",
@@ -202,6 +213,7 @@ export const runScheduledJob = task({
   run: async (payload: RunScheduledJobPayload, { ctx }) => {
     const { jobId } = payload;
     const taskId = ctx.run.id;
+    const startTime = performance.now();
 
     console.log(`[RunScheduledJob] Starting job ${jobId}`);
 
@@ -212,24 +224,45 @@ export const runScheduledJob = task({
       return { success: false, reason: "job_not_found" };
     }
 
+    const taskCtx = {
+      taskId,
+      taskName: "run-scheduled-job",
+      conversationId: job.conversationId,
+      userId: job.userId,
+    };
+
+    await logTaskStarted(taskCtx, { jobId, jobName: job.name });
+
     if (!job.enabled) {
       console.log(`[RunScheduledJob] Job is disabled: ${jobId}`);
-      return { success: false, reason: "job_disabled" };
+      const result = { success: false, reason: "job_disabled" };
+      await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+      return result;
     }
 
     // Get user's phone number
     const phoneNumber = await getPhoneNumberForUser(job.userId);
     if (!phoneNumber) {
-      console.error(`[RunScheduledJob] No phone number for user: ${job.userId}`);
+      console.error(
+        `[RunScheduledJob] No phone number for user: ${job.userId}`,
+      );
       await markJobFailed(jobId, false);
-      return { success: false, reason: "no_phone_number" };
+      const result = { success: false, reason: "no_phone_number" };
+      await logTaskFailed(
+        taskCtx,
+        "No phone number for user",
+        performance.now() - startTime,
+      );
+      return result;
     }
 
     try {
       // Build conversation context for the job
       const context = await buildScheduledJobContext(job, phoneNumber);
 
-      console.log(`[RunScheduledJob] Executing prompt for job "${job.name}": ${job.prompt}`);
+      console.log(
+        `[RunScheduledJob] Executing prompt for job "${job.name}": ${job.prompt}`,
+      );
 
       // Create a synthetic message with the job's prompt
       // This looks like a system instruction for the agent
@@ -259,12 +292,16 @@ export const runScheduledJob = task({
 
       // If no actions, the agent decided not to respond
       if (actions.length === 0) {
-        console.log(`[RunScheduledJob] Job ${jobId} completed, no actions generated`);
-        return {
+        console.log(
+          `[RunScheduledJob] Job ${jobId} completed, no actions generated`,
+        );
+        const result = {
           success: true,
           notified: false,
           reason: "no_actions_generated",
         };
+        await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+        return result;
       }
 
       // Determine notification target based on job context
@@ -285,14 +322,21 @@ export const runScheduledJob = task({
 
       console.log(`[RunScheduledJob] Job ${jobId} completed and user notified`);
 
-      return {
+      const result = {
         success: true,
         notified: true,
         actionsExecuted: actions.length,
       };
+      await logTaskCompleted(taskCtx, result, performance.now() - startTime);
+      return result;
     } catch (error) {
       console.error(`[RunScheduledJob] Error executing job ${jobId}:`, error);
       await markJobFailed(jobId, false);
+      await logTaskFailed(
+        taskCtx,
+        error instanceof Error ? error : String(error),
+        performance.now() - startTime,
+      );
       return {
         success: false,
         reason: "execution_error",

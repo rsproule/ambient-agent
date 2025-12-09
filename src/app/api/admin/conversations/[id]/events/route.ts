@@ -1,10 +1,16 @@
 /**
- * Admin API: Get events for a conversation
+ * Admin API: Get events for a conversation (paginated)
+ *
+ * Query params:
+ * - limit: number of events to fetch (default 50)
+ * - cursor: cursor for pagination (event ID to fetch before)
  */
 
 import prisma from "@/src/db/client";
 import { requireAdmin } from "@/src/lib/auth/admin";
 import { NextRequest, NextResponse } from "next/server";
+
+const DEFAULT_LIMIT = 50;
 
 export async function GET(
   request: NextRequest,
@@ -17,6 +23,9 @@ export async function GET(
   }
 
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const limit = Math.min(parseInt(searchParams.get("limit") || String(DEFAULT_LIMIT)), 100);
+  const cursor = searchParams.get("cursor");
 
   try {
     // Get the conversation to find its conversationId
@@ -32,15 +41,24 @@ export async function GET(
       );
     }
 
-    // Fetch events for this conversation
+    // Fetch events for this conversation (newest first, paginate backwards)
     const events = await prisma.event.findMany({
       where: { conversationId: conversation.conversationId },
       orderBy: { createdAt: "desc" },
-      take: 500,
+      take: limit + 1, // Fetch one extra to check if there are more
+      ...(cursor && {
+        cursor: { id: cursor },
+        skip: 1, // Skip the cursor itself
+      }),
     });
 
+    // Check if there are more events
+    const hasMore = events.length > limit;
+    const returnedEvents = hasMore ? events.slice(0, limit) : events;
+    const nextCursor = hasMore ? returnedEvents[returnedEvents.length - 1]?.id : null;
+
     return NextResponse.json({
-      events: events.map((e) => ({
+      events: returnedEvents.map((e) => ({
         id: e.id,
         conversationId: e.conversationId,
         userId: e.userId,
@@ -49,6 +67,8 @@ export async function GET(
         payload: e.payload,
         createdAt: e.createdAt,
       })),
+      nextCursor,
+      hasMore,
     });
   } catch (error) {
     console.error("[Admin API] Error fetching events:", error);
