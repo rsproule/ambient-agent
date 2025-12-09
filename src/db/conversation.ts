@@ -160,12 +160,13 @@ export async function saveUserMessage(
 
 /**
  * Save an assistant message to the database
- * Supports both string content and structured content (for tool calls)
+ * Content is always a plain string (the message text)
  */
 export async function saveAssistantMessage(
   conversationId: string,
-  content: string | object,
+  content: string,
   messageId?: string,
+  attachments?: string[],
 ) {
   const conversation = await getOrCreateConversation(conversationId);
 
@@ -173,9 +174,11 @@ export async function saveAssistantMessage(
     data: {
       conversationId: conversation.id,
       role: "assistant",
-      content: content as Prisma.InputJsonValue,
+      content: content,
       messageId,
-      attachments: [], // Assistant messages can have attachments too
+      attachments: attachments || [],
+      // Set delivery status to pending if we have a messageId (means we're sending via LoopMessage)
+      deliveryStatus: messageId ? "pending" : undefined,
     },
   });
 
@@ -543,7 +546,8 @@ export async function getConversationMessages(
       userContext,
       systemState,
       groupParticipants,
-      recentAttachments: recentAttachments.length > 0 ? recentAttachments : undefined,
+      recentAttachments:
+        recentAttachments.length > 0 ? recentAttachments : undefined,
       groupChatCustomPrompt,
     },
   };
@@ -555,23 +559,36 @@ export async function getConversationMessages(
 function formatMessageForAI(
   msg: {
     role: string;
-    content: unknown; // Can be string or structured JSON (for tool calls)
+    content: unknown; // JSON from database
     messageId: string | null;
     sender: string | null;
     attachments: string[];
   },
   isGroup: boolean,
 ): ModelMessage {
-  // If content is already structured (JSON object/array), use it directly for assistant messages
-  // This preserves tool_use and tool_result blocks
-  if (msg.role === "assistant" && typeof msg.content !== "string") {
-    return {
-      role: "assistant",
-      content: msg.content,
-    } as ModelMessage;
+  // Assistant messages: content is ALWAYS a string (we only save strings via saveAssistantMessage)
+  // If it's not a string, that's a data integrity issue - log and recover
+  if (msg.role === "assistant") {
+    if (typeof msg.content !== "string") {
+      logger.error(
+        "DATA INTEGRITY: Assistant message content is not a string",
+        {
+          component: "formatMessageForAI",
+          contentType: typeof msg.content,
+          content: JSON.stringify(msg.content)?.slice(0, 200),
+        },
+      );
+      // Recovery: stringify whatever is there
+      const recovered =
+        msg.content === null || msg.content === undefined
+          ? "[empty]"
+          : JSON.stringify(msg.content);
+      return { role: "assistant", content: recovered } as ModelMessage;
+    }
+    return { role: "assistant", content: msg.content } as ModelMessage;
   }
 
-  // For string content, apply formatting
+  // For user/system messages, apply formatting (may include images)
   const content = buildMessageContent(msg);
 
   // System messages (merchant/service messages to be delivered)
@@ -616,7 +633,7 @@ function extractAssistantAttachments(content: unknown): string[] {
         (action): action is { type: string; attachments?: string[] } =>
           typeof action === "object" &&
           action !== null &&
-          (action as { type?: string }).type === "message"
+          (action as { type?: string }).type === "message",
       )
       .flatMap((action) => action.attachments || []);
   } catch {
@@ -638,7 +655,7 @@ function isSupportedImageFormat(url: string): boolean {
     const urlLower = url.toLowerCase();
     // Check file extension
     const hasExtension = SUPPORTED_IMAGE_EXTENSIONS.some((ext) =>
-      urlLower.includes(ext)
+      urlLower.includes(ext),
     );
     if (hasExtension) return true;
 
@@ -688,7 +705,7 @@ function buildMessageContent(msg: {
   // Separate supported images from unsupported attachments
   const supportedImages = msg.attachments.filter(isSupportedImageFormat);
   const unsupportedAttachments = msg.attachments.filter(
-    (url) => !isSupportedImageFormat(url)
+    (url) => !isSupportedImageFormat(url),
   );
 
   // Multi-part message with attachments
@@ -801,9 +818,6 @@ export async function acquireResponseLock(
   return true;
 }
 
-/**
- * Release the response lock for a conversation
- */
 export async function releaseResponseLock(
   conversationId: string,
   taskId: string,
@@ -866,17 +880,52 @@ export async function isCurrentGeneration(
 }
 
 /**
- * @deprecated Use isCurrentGeneration() polling instead
+ * Update the delivery status of a message by its LoopMessage message_id
  */
-export async function shouldInterrupt(
-  conversationId: string,
-  taskId: string,
-  sender?: string,
-  isGroup?: boolean,
+export async function updateMessageDeliveryStatus(
+  loopMessageId: string,
+  status: "pending" | "scheduled" | "sent" | "failed" | "timeout",
+  error?: string,
 ): Promise<boolean> {
-  if (isGroup && sender) {
+  try {
+    // Find messages with this LoopMessage ID (could be multiple if retried)
+    const messages = await prisma.message.findMany({
+      where: { messageId: loopMessageId },
+    });
+
+    if (messages.length === 0) {
+      logger.warn("No message found for delivery status update", {
+        component: "updateMessageDeliveryStatus",
+        loopMessageId,
+        status,
+      });
+      return false;
+    }
+
+    // Update all matching messages (usually just one)
+    await prisma.message.updateMany({
+      where: { messageId: loopMessageId },
+      data: {
+        deliveryStatus: status,
+        deliveryError: error || null,
+      },
+    });
+
+    logger.debug("Updated message delivery status", {
+      component: "updateMessageDeliveryStatus",
+      loopMessageId,
+      status,
+      messageCount: messages.length,
+    });
+
+    return true;
+  } catch (err) {
+    logger.error("Failed to update message delivery status", {
+      component: "updateMessageDeliveryStatus",
+      loopMessageId,
+      status,
+      error: err,
+    });
     return false;
   }
-  const isCurrent = await isCurrentGeneration(conversationId, taskId, sender, isGroup);
-  return !isCurrent;
 }

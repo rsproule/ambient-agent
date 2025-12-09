@@ -109,6 +109,8 @@ export async function deliverMessage(
         recipient: conversationId, // For DMs, recipient is the phone number
         actions,
         taskId,
+        sender: undefined, // For DMs, no sender needed
+        isGroup: false, // delivery.ts only handles DMs
       },
     );
 

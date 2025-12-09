@@ -1,13 +1,13 @@
-import { type MessageAction } from "@/src/ai/respondToMessage";
 import {
+  isCurrentGeneration,
   releaseResponseLock,
   saveAssistantMessage,
-  shouldInterrupt,
 } from "@/src/db/conversation";
+import { LoopMessageClient } from "@/src/lib/loopmessage-sdk/client";
+import { type MessageAction } from "@/src/lib/loopmessage-sdk/message-actions";
 import { task, wait } from "@trigger.dev/sdk/v3";
-import { LoopMessageService } from "loopmessage-sdk";
 
-const client = new LoopMessageService({
+const client = new LoopMessageClient({
   loopAuthKey: process.env.LOOP_AUTH_KEY!,
   loopSecretKey: process.env.LOOP_SECRET_KEY!,
   senderName: process.env.LOOP_SENDER_NAME!,
@@ -29,6 +29,14 @@ export const handleMessageResponse = task({
     preset: "small-1x", // 0.5 vCPU, 0.5 GB RAM
   },
   run: async (payload: HandleMessageResponsePayload) => {
+    // Track results for each action
+    const results: Array<{
+      index: number;
+      type: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+
     try {
       // Execute each action in sequence
       for (let i = 0; i < payload.actions.length; i++) {
@@ -37,20 +45,21 @@ export const handleMessageResponse = task({
         // Check for interrupt before each action (except the first)
         // Note: Group chats with per-sender locking don't use interrupts
         if (i > 0) {
-          const interrupted = await shouldInterrupt(
+          const isCurrent = await isCurrentGeneration(
             payload.conversationId,
             payload.taskId,
             payload.sender,
             payload.isGroup,
           );
-          if (interrupted) {
+          if (!isCurrent) {
             console.log(
               `Response interrupted for conversation ${payload.conversationId}, stopping at action ${i}/${payload.actions.length}`,
             );
             return {
               interrupted: true,
-              actionsCompleted: i,
+              actionsCompleted: results.filter((r) => r.success).length,
               totalActions: payload.actions.length,
+              results,
             };
           }
         }
@@ -60,17 +69,51 @@ export const handleMessageResponse = task({
           await wait.for({ seconds: action.delay / 1000 });
         }
 
-        await executeAction(action, payload);
+        try {
+          // Execute action and get LoopMessage ID + attachments
+          const result = await executeAction(action, payload);
+          results.push({ index: i, type: action.type, success: true });
 
-        // Save assistant messages to the database
-        if (action.type === "message") {
-          await saveAssistantMessage(payload.conversationId, action.text);
+          // Save successful actions to the database with messageId for delivery tracking
+          if (action.type === "message") {
+            await saveAssistantMessage(
+              payload.conversationId,
+              action.text,
+              result.messageId,
+              result.attachments,
+            );
+          } else if (action.type === "reaction") {
+            // Save reactions with a special format
+            const reactionContent = `[REACTION: ${action.reaction} on msg_id: ${action.message_id}]`;
+            await saveAssistantMessage(
+              payload.conversationId,
+              reactionContent,
+              result.messageId,
+            );
+          }
+        } catch (error) {
+          const errorMsg =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `[handleMessage] Action ${i} (${action.type}) failed for ${payload.conversationId}, continuing:`,
+            errorMsg,
+          );
+          results.push({
+            index: i,
+            type: action.type,
+            success: false,
+            error: errorMsg,
+          });
+          // Continue to next action - don't block on LLM-generated bad actions
         }
       }
 
+      const successCount = results.filter((r) => r.success).length;
       return {
-        success: true,
-        actionsCompleted: payload.actions.length,
+        success: successCount > 0, // At least one action worked
+        actionsCompleted: successCount,
+        totalActions: payload.actions.length,
+        results,
       };
     } finally {
       // Always release the lock when done (success or failure)
@@ -92,7 +135,7 @@ export const handleMessageResponse = task({
  */
 function filterValidAttachments(attachments?: string[]): string[] | undefined {
   if (!attachments || attachments.length === 0) return undefined;
-  
+
   const valid = attachments
     .filter((url) => {
       if (!url || typeof url !== "string") return false;
@@ -107,14 +150,19 @@ function filterValidAttachments(attachments?: string[]): string[] | undefined {
       return true;
     })
     .slice(0, 3); // Max 3 attachments
-  
+
   return valid.length > 0 ? valid : undefined;
+}
+
+interface ExecuteActionResult {
+  messageId: string | undefined;
+  attachments?: string[];
 }
 
 async function executeAction(
   action: MessageAction,
   payload: HandleMessageResponsePayload,
-) {
+): Promise<ExecuteActionResult> {
   // Validate we have a recipient or group
   if (!payload.group && !payload.recipient) {
     throw new Error(
@@ -130,16 +178,18 @@ async function executeAction(
   console.log(
     `Executing ${action.type} action for conversation ${payload.conversationId}`,
     baseParams,
+    action,
   );
 
   switch (action.type) {
     case "message":
       // Filter attachments to only valid HTTPS URLs
       const validAttachments = filterValidAttachments(action.attachments);
-      
+
       // Use appropriate method based on what's being sent
+      let response;
       if (action.reply_to_id) {
-        await client.sendReply({
+        response = await client.sendReply({
           ...baseParams,
           text: action.text,
           reply_to_id: action.reply_to_id,
@@ -148,7 +198,7 @@ async function executeAction(
           subject: action.subject,
         });
       } else if (action.effect) {
-        await client.sendMessageWithEffect({
+        response = await client.sendMessageWithEffect({
           ...baseParams,
           text: action.text,
           effect: action.effect,
@@ -156,22 +206,22 @@ async function executeAction(
           subject: action.subject,
         });
       } else {
-        await client.sendLoopMessage({
+        response = await client.sendLoopMessage({
           ...baseParams,
           text: action.text,
           ...(validAttachments && { attachments: validAttachments }),
           subject: action.subject,
         });
       }
-      break;
+      return { messageId: response.message_id, attachments: validAttachments };
 
     case "reaction":
-      await client.sendReaction({
+      const reactionResponse = await client.sendReaction({
         ...baseParams,
         text: "Reaction", // Required by SDK validation but ignored by API for reactions
         message_id: action.message_id,
         reaction: action.reaction,
       });
-      break;
+      return { messageId: reactionResponse.message_id };
   }
 }

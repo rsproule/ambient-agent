@@ -1,13 +1,16 @@
-import { z } from "zod";
-
 /**
- * iMessage Action Schema
- * 
- * Defines the structured output format for interacting with iMessage.
- * This schema is platform-specific (iMessage) and can be used by any agent
- * that needs to generate iMessage actions.
+ * AI Agent Message Action Types
+ *
+ * These types define the structured output format for our AI agents.
+ * Uses our internal constants for validation to ensure API compatibility.
  */
 
+import { z } from "zod";
+import { MESSAGE_EFFECTS, MESSAGE_REACTIONS } from "./constants";
+
+/**
+ * Message Action Schema - AI agent actions that map to LoopMessage API calls
+ */
 export const MessageActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("message"),
@@ -22,24 +25,7 @@ export const MessageActionSchema = z.discriminatedUnion("type", [
       .array(z.string())
       .optional()
       .describe("Array of image URLs to attach"),
-    effect: z
-      .enum([
-        "slam",
-        "loud",
-        "gentle",
-        "invisibleInk",
-        "echo",
-        "spotlight",
-        "balloons",
-        "confetti",
-        "love",
-        "lasers",
-        "fireworks",
-        "shootingStar",
-        "celebration",
-      ])
-      .optional()
-      .describe("iMessage effect"),
+    effect: z.enum(MESSAGE_EFFECTS).optional().describe("iMessage effect"),
     subject: z
       .string()
       .optional()
@@ -50,20 +36,7 @@ export const MessageActionSchema = z.discriminatedUnion("type", [
     type: z.literal("reaction"),
     message_id: z.string().describe("The message ID to react to"),
     reaction: z
-      .enum([
-        "love",
-        "like",
-        "dislike",
-        "laugh",
-        "exclaim",
-        "question",
-        "-love",
-        "-like",
-        "-dislike",
-        "-laugh",
-        "-exclaim",
-        "-question",
-      ])
+      .enum(MESSAGE_REACTIONS)
       .describe("Reaction type (prefix with - to remove)"),
     delay: z
       .number()
@@ -90,3 +63,5 @@ export const IMessageResponseSchema = z.object({
 export type MessageAction = z.infer<typeof MessageActionSchema>;
 export type IMessageResponse = z.infer<typeof IMessageResponseSchema>;
 
+// Re-export our types for convenience
+export type { MessageEffect, MessageReaction } from "./constants";

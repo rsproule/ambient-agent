@@ -18,11 +18,11 @@ import logger from "@/src/lib/logger";
 import type {
   IMessageResponse,
   MessageAction,
-} from "@/src/lib/loopmessage-sdk/actions";
+} from "@/src/lib/loopmessage-sdk/message-actions";
 import { Output, ToolLoopAgent, type ModelMessage } from "ai";
 
 // Re-export MessageAction type for convenience
-export type { MessageAction } from "@/src/lib/loopmessage-sdk/actions";
+export type { MessageAction } from "@/src/lib/loopmessage-sdk/message-actions";
 
 /**
  * Options for respondToMessage
