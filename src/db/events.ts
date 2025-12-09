@@ -22,7 +22,8 @@ export type EventSource =
   | "assistant"
   | "system"
   | "webhook"
-  | `app:${string}`;
+  | `app:${string}`
+  | `task:${string}`;
 
 interface LogEventParams {
   conversationId?: string;

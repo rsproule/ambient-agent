@@ -132,9 +132,7 @@ function AdminChatsContent() {
     if (!messagesData?.pages) return [];
     // Pages are newest-first, messages within pages are newest-first
     // We need to reverse both to get chronological order
-    return messagesData.pages
-      .flatMap((page) => page.messages)
-      .reverse();
+    return messagesData.pages.flatMap((page) => page.messages).reverse();
   }, [messagesData]);
 
   // Fetch events with infinite scroll (paginated)
