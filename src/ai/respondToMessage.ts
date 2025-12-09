@@ -60,12 +60,18 @@ export interface RespondToMessageOptions {
  * @returns Array of MessageActions (messages or reactions) to execute
  */
 export async function respondToMessage(
-  agent: Agent,
+  defaultAgent: Agent,
   messages: ModelMessage[],
   context: ConversationContext,
   options?: RespondToMessageOptions,
 ): Promise<MessageAction[]> {
   const before = performance.now();
+
+  // Get active app (foreground app for this conversation)
+  const activeApp = getAppForContext(context);
+
+  // Use app's agent if defined, otherwise use the default agent
+  const agent = activeApp?.agent ?? defaultAgent;
 
   // Build conversation context string using agent's context builder
   const contextString = agent.buildContext(context);
@@ -116,9 +122,6 @@ export async function respondToMessage(
     ...contextBoundTools,
     ...integrationTools,
   };
-
-  // Get active app (foreground app for this conversation)
-  const activeApp = getAppForContext(context);
 
   // If an app is active, filter tools to only those allowed
   if (activeApp?.allowedTools) {
