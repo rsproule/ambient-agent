@@ -1,3 +1,7 @@
+packages:
+  - '.'
+  - 'claude-code-worker'
+
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'
