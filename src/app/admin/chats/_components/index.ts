@@ -7,5 +7,6 @@ export { DeleteConversationDialog } from "./DeleteConversationDialog";
 export { DocumentDialog } from "./DocumentDialog";
 export { EventView } from "./EventView";
 export { MessageDetailsDialog } from "./MessageDetailsDialog";
+export { ResetNegotiationDialog } from "./ResetNegotiationDialog";
 export * from "./types";
 export * from "./utils";

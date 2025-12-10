@@ -24,6 +24,8 @@ import {
   fetchConversationMessages,
   fetchConversations,
   MessageDetailsDialog,
+  resetNegotiation,
+  ResetNegotiationDialog,
   retryMessage,
   sendMessage,
   type ConversationInfo,
@@ -73,6 +75,8 @@ function AdminChatsContent() {
   const [selectedDocument, setSelectedDocument] =
     useState<UserContextDocument | null>(null);
   const [conversationToDelete, setConversationToDelete] =
+    useState<ConversationInfo | null>(null);
+  const [conversationToReset, setConversationToReset] =
     useState<ConversationInfo | null>(null);
   const [showContext, setShowContext] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>("chat");
@@ -208,6 +212,17 @@ function AdminChatsContent() {
     },
   });
 
+  // Reset negotiation mutation
+  const resetNegotiationMutation = useMutation({
+    mutationFn: resetNegotiation,
+    onSuccess: () => {
+      setConversationToReset(null);
+      queryClient.invalidateQueries({
+        queryKey: ["admin-conversation", selectedConvoId],
+      });
+    },
+  });
+
   const handleSendMessage = () => {
     if (!messageInput.trim() || !conversationDetail) return;
 
@@ -253,6 +268,10 @@ function AdminChatsContent() {
             onDeleteConversation={() =>
               conversationDetail &&
               setConversationToDelete(conversationDetail.conversation)
+            }
+            onResetNegotiation={() =>
+              conversationDetail &&
+              setConversationToReset(conversationDetail.conversation)
             }
             viewMode={viewMode}
             onViewModeChange={setViewMode}
@@ -302,6 +321,14 @@ function AdminChatsContent() {
           onClose={() => setConversationToDelete(null)}
           onConfirm={(id) => deleteConversationMutation.mutate(id)}
           isDeleting={deleteConversationMutation.isPending}
+        />
+
+        {/* Reset Negotiation Dialog */}
+        <ResetNegotiationDialog
+          conversation={conversationToReset}
+          onClose={() => setConversationToReset(null)}
+          onConfirm={(id) => resetNegotiationMutation.mutate(id)}
+          isResetting={resetNegotiationMutation.isPending}
         />
       </div>
     </div>

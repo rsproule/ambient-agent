@@ -160,3 +160,27 @@ export async function fetchConversationMessages(
   }
   return res.json();
 }
+
+export interface ResetNegotiationResponse {
+  success: boolean;
+  message: string;
+  userId: string;
+  userName: string | null;
+  deletedPayouts: number;
+  deletedOffers: number;
+  deletedApps: number;
+}
+
+export async function resetNegotiation(
+  conversationId: string,
+): Promise<ResetNegotiationResponse> {
+  const res = await fetch(
+    `/api/admin/conversations/${conversationId}/reset-negotiation`,
+    { method: "POST" },
+  );
+  if (!res.ok) {
+    const data = await res.json();
+    throw new Error(data.error || "Failed to reset negotiation");
+  }
+  return res.json();
+}

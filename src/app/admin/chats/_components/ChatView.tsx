@@ -21,6 +21,7 @@ import {
   PanelRightClose,
   PanelRightOpen,
   RefreshCw,
+  RotateCcw,
   Send,
   Trash2,
 } from "lucide-react";
@@ -93,6 +94,7 @@ interface ChatViewProps {
   isSending: boolean;
   sendError: Error | null;
   onDeleteConversation: () => void;
+  onResetNegotiation?: () => void;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   onLoadMoreMessages?: () => void;
@@ -117,6 +119,7 @@ export function ChatView({
   isSending,
   sendError,
   onDeleteConversation,
+  onResetNegotiation,
   viewMode,
   onViewModeChange,
   onLoadMoreMessages,
@@ -193,6 +196,12 @@ export function ChatView({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            {!conversationDetail.conversation.isGroup && onResetNegotiation && (
+              <DropdownMenuItem onClick={onResetNegotiation}>
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset Negotiation
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onClick={onDeleteConversation}
               className="text-destructive focus:text-destructive"
