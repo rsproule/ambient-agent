@@ -49,6 +49,7 @@ const envSchema = z.object({
 
   // Claude Code Worker configuration
   CLAUDE_CODE_WORKER_URL: z.string().url().optional(),
+  CLAUDE_CODE_API_SECRET: z.string().optional(), // Shared secret for worker auth
 
   // MeritSpace GitHub configuration (for workspace creation)
   MERITSPACE_GITHUB_TOKEN: z.string().optional(), // merit-bot token with org repo creation scope
@@ -176,6 +177,9 @@ export const payoutConfig = {
 export const claudeCodeConfig = {
   get workerUrl() {
     return env.CLAUDE_CODE_WORKER_URL;
+  },
+  get apiSecret() {
+    return env.CLAUDE_CODE_API_SECRET;
   },
 };
 

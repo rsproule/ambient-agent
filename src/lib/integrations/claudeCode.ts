@@ -5,7 +5,7 @@
  * Each user has a persistent GitHub workspace at MeritSpace/{username}.
  */
 
-const MERITSPACE_ORG = "MeritSpace";
+import { claudeCodeConfig, meritSpaceConfig } from "@/src/lib/config/env";
 
 export interface ClaudeCodeRequest {
   /** User's workspace username (the repo will be MeritSpace/{username}) */
@@ -26,7 +26,7 @@ export interface ClaudeCodeResult {
  * Get the worker URL from environment
  */
 function getWorkerUrl(): string {
-  const url = process.env.CLAUDE_CODE_WORKER_URL;
+  const url = claudeCodeConfig.workerUrl;
   if (!url) {
     throw new Error("CLAUDE_CODE_WORKER_URL environment variable is not set");
   }
@@ -34,10 +34,21 @@ function getWorkerUrl(): string {
 }
 
 /**
+ * Get the API secret from environment
+ */
+function getApiSecret(): string {
+  const secret = claudeCodeConfig.apiSecret;
+  if (!secret) {
+    throw new Error("CLAUDE_CODE_API_SECRET environment variable is not set");
+  }
+  return secret;
+}
+
+/**
  * Build the full repo path from workspace username
  */
 function buildRepoPath(workspaceUsername: string): string {
-  return `${MERITSPACE_ORG}/${workspaceUsername}`;
+  return `${meritSpaceConfig.org}/${workspaceUsername}`;
 }
 
 /**
@@ -54,6 +65,7 @@ export async function* streamClaudeCode(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      Authorization: `Bearer ${getApiSecret()}`,
     },
     body: JSON.stringify({
       repo,

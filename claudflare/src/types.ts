@@ -3,6 +3,7 @@ import { Sandbox } from "@cloudflare/sandbox";
 export interface Env {
   ANTHROPIC_API_KEY: string;
   GITHUB_TOKEN: string;
+  API_SECRET: string;
   Sandbox: DurableObjectNamespace<Sandbox>;
 }
 

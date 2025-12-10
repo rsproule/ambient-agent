@@ -4,7 +4,7 @@
     "lib": ["esnext"],
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["@types/node", "node"],
+    "types": ["@cloudflare/workers-types", "@types/node"],
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
     "strict": true,

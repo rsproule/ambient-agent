@@ -4,11 +4,12 @@ import { Env, TaskRequest } from "../types";
 import { escapeShell } from "../utils/strings";
 
 /**
- * Wraps a ReadableStream to auto-commit changes when execution completes
+ * Wraps a ReadableStream to auto-commit changes and cleanup worktree when execution completes
  */
-function wrapWithAutoCommit(
+function wrapWithAutoCommitAndCleanup(
   stream: ReadableStream<Uint8Array>,
   sandbox: Awaited<ReturnType<typeof getSandbox>>,
+  worktreePath: string,
   branch: string,
   taskSummary: string,
 ): ReadableStream<Uint8Array> {
@@ -20,13 +21,13 @@ function wrapWithAutoCommit(
         const { done, value } = await reader.read();
 
         if (done) {
-          // Execution complete - commit and push changes
+          // Execution complete - commit and push changes, then cleanup worktree
           try {
             const commitMessage = `Claude: ${taskSummary.substring(0, 50)}${
               taskSummary.length > 50 ? "..." : ""
             }`;
             await sandbox.exec(`
-              cd workspace &&
+              cd ${worktreePath} &&
               git add -A &&
               git diff --cached --quiet || git commit -m "${escapeShell(
                 commitMessage,
@@ -37,6 +38,17 @@ function wrapWithAutoCommit(
             console.error("Auto-commit failed:", commitError);
             // Don't fail the stream, just log the error
           }
+
+          // Cleanup: remove the worktree
+          try {
+            await sandbox.exec(`
+              cd /repo &&
+              git worktree remove ${worktreePath} --force 2>/dev/null || rm -rf ${worktreePath}
+            `);
+          } catch (cleanupError) {
+            console.error("Worktree cleanup failed:", cleanupError);
+          }
+
           controller.close();
           return;
         }
@@ -48,6 +60,15 @@ function wrapWithAutoCommit(
     },
     cancel() {
       reader.cancel();
+      // Attempt cleanup on cancel too
+      sandbox
+        .exec(
+          `
+        cd /repo &&
+        git worktree remove ${worktreePath} --force 2>/dev/null || rm -rf ${worktreePath}
+      `,
+        )
+        .catch(() => {});
     },
   });
 }
@@ -56,6 +77,12 @@ export async function handleExecuteTask(
   request: Request,
   env: Env,
 ): Promise<Response> {
+  // Verify API secret
+  const authHeader = request.headers.get("Authorization");
+  if (!authHeader || authHeader !== `Bearer ${env.API_SECRET}`) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   try {
     const body = (await request.json()) as TaskRequest;
     const { repo, task, branch = "main" } = body;
@@ -90,8 +117,8 @@ export async function handleExecuteTask(
       return new Response("Invalid branch name", { status: 400 });
     }
 
-    // Open sandbox with unique ID
-    const sandbox = getSandbox(env.Sandbox, crypto.randomUUID().slice(0, 8));
+    // Open sandbox with user-specific ID (reuses container per user)
+    const sandbox = getSandbox(env.Sandbox, username);
 
     const { ANTHROPIC_API_KEY, GITHUB_TOKEN } = env;
 
@@ -107,6 +134,10 @@ export async function handleExecuteTask(
       });
     }
 
+    // Generate unique request ID for this execution (for worktree isolation)
+    const requestId = crypto.randomUUID().slice(0, 8);
+    const worktreePath = `/worktrees/${requestId}`;
+
     // Set env vars for the session
     await sandbox.setEnvVars({ ANTHROPIC_API_KEY, GITHUB_TOKEN });
 
@@ -115,24 +146,47 @@ export async function handleExecuteTask(
       `runuser -u claudeuser -- env HOME=/home/claudeuser GITHUB_TOKEN="${GITHUB_TOKEN}" gh auth login --with-token <<< "${GITHUB_TOKEN}"`,
     );
 
-    // Clone user's persistent workspace
+    // Clone or update the main repo (shared across requests for this user)
+    // Use a bare-ish approach: clone once, fetch on subsequent requests
     try {
-      await sandbox.gitCheckout(repo, { targetDir: "workspace", branch });
+      await sandbox.exec(`
+        if [ ! -d /repo/.git ]; then
+          git clone https://x-access-token:${GITHUB_TOKEN}@github.com/${repo}.git /repo
+        else
+          cd /repo && git fetch origin
+        fi
+      `);
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      console.error("Sandbox git checkout error:", errorMessage);
+      console.error("Sandbox git clone/fetch error:", errorMessage);
       return new Response(`Failed to clone workspace: ${errorMessage}`, {
         status: 500,
       });
     }
 
-    // Set permissions for claudeuser
-    await sandbox.exec(`chown -R claudeuser:claudeuser workspace`);
+    // Create a worktree for this specific request (allows concurrent execution)
+    try {
+      await sandbox.exec(`
+        mkdir -p /worktrees &&
+        cd /repo &&
+        git worktree add ${worktreePath} origin/${branch} -B ${branch}
+      `);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error("Failed to create worktree:", errorMessage);
+      return new Response(`Failed to create worktree: ${errorMessage}`, {
+        status: 500,
+      });
+    }
 
-    // Configure git for commits
+    // Set permissions for claudeuser
+    await sandbox.exec(`chown -R claudeuser:claudeuser ${worktreePath}`);
+
+    // Configure git for commits in the worktree
     await sandbox.exec(`
-      cd workspace &&
+      cd ${worktreePath} &&
       git config user.email "merit-bot@meritspace.dev" &&
       git config user.name "Merit Bot"
     `);
@@ -141,13 +195,19 @@ export async function handleExecuteTask(
     const systemPrompt = escapeShell(WORKSPACE_SYSTEM(username));
     const taskPrompt = escapeShell(task);
 
-    // Construct command
-    const cmd = `cd workspace && runuser -u claudeuser -- env HOME=/home/claudeuser claude --append-system-prompt "${systemPrompt}" --model "claude-sonnet-4-20250514" -p "${taskPrompt}" --dangerously-skip-permissions --output-format stream-json --verbose`;
+    // Construct command (run in the worktree)
+    const cmd = `cd ${worktreePath} && runuser -u claudeuser -- env HOME=/home/claudeuser claude --append-system-prompt "${systemPrompt}" --model "claude-sonnet-4-20250514" -p "${taskPrompt}" --dangerously-skip-permissions --output-format stream-json --verbose`;
 
     const stream = await sandbox.execStream(cmd);
 
-    // Wrap stream with auto-commit on completion
-    const wrappedStream = wrapWithAutoCommit(stream, sandbox, branch, task);
+    // Wrap stream with auto-commit and worktree cleanup on completion
+    const wrappedStream = wrapWithAutoCommitAndCleanup(
+      stream,
+      sandbox,
+      worktreePath,
+      branch,
+      task,
+    );
 
     return new Response(wrappedStream, {
       headers: {
