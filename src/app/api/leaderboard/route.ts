@@ -1,4 +1,5 @@
 import prisma from "@/src/db/client";
+import { auth } from "@/src/lib/auth/config";
 import { getTreasuryBalance } from "@/src/lib/blockchain/usdc";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -7,6 +8,8 @@ export interface LeaderboardEntry {
   amount: string;
   displayName: string | null;
   date: string;
+  userId: string;
+  isCurrentUser: boolean;
 }
 
 export interface LeaderboardResponse {
@@ -14,6 +17,7 @@ export interface LeaderboardResponse {
   totalPayouts: number;
   totalAmount: string;
   treasuryBalance: string | null;
+  currentUserId: string | null;
 }
 
 export async function GET(request: NextRequest) {
@@ -30,6 +34,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Get current user session (optional - leaderboard is public)
+    const session = await auth();
+    const currentUserId = session?.user?.id || null;
+
     // Get completed payouts ordered by amount (descending)
     const payouts = await prisma.payout.findMany({
       where: {
@@ -61,6 +69,8 @@ export async function GET(request: NextRequest) {
       amount: payout.amount.toString(),
       displayName: userMap.get(payout.userId) || null,
       date: payout.completedAt?.toISOString() || payout.createdAt.toISOString(),
+      userId: payout.userId,
+      isCurrentUser: payout.userId === currentUserId,
     }));
 
     // Get totals
@@ -82,6 +92,7 @@ export async function GET(request: NextRequest) {
       totalPayouts: totals._count,
       totalAmount: totals._sum.amount?.toString() || "0",
       treasuryBalance: treasuryBalance?.formatted || null,
+      currentUserId,
     };
 
     return NextResponse.json(response);

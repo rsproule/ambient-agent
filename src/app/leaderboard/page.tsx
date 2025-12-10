@@ -1,13 +1,16 @@
 "use client";
 
 import { Loader } from "@/src/components/loader";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 
 interface LeaderboardEntry {
   rank: number;
   amount: string;
   displayName: string | null;
   date: string;
+  userId: string;
+  isCurrentUser: boolean;
 }
 
 interface LeaderboardResponse {
@@ -15,6 +18,7 @@ interface LeaderboardResponse {
   totalPayouts: number;
   totalAmount: string;
   treasuryBalance: string | null;
+  currentUserId: string | null;
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardResponse> {
@@ -43,7 +47,26 @@ function formatDate(dateString: string): string {
   });
 }
 
+async function updateDisplayName(
+  displayName: string,
+): Promise<{ displayName: string | null }> {
+  const response = await fetch("/api/users/display-name", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ displayName }),
+  });
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || "Failed to update display name");
+  }
+  return response.json();
+}
+
 export default function LeaderboardPage() {
+  const queryClient = useQueryClient();
+  const [editingName, setEditingName] = useState(false);
+  const [newName, setNewName] = useState("");
+
   const {
     data: leaderboard,
     isLoading,
@@ -54,6 +77,31 @@ export default function LeaderboardPage() {
     staleTime: 10 * 1000,
     refetchInterval: 10 * 1000,
   });
+
+  const updateNameMutation = useMutation({
+    mutationFn: updateDisplayName,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["leaderboard"] });
+      setEditingName(false);
+      setNewName("");
+    },
+  });
+
+  const currentUserEntry = leaderboard?.entries.find((e) => e.isCurrentUser);
+
+  const handleStartEdit = () => {
+    setNewName(currentUserEntry?.displayName || "");
+    setEditingName(true);
+  };
+
+  const handleSave = () => {
+    updateNameMutation.mutate(newName);
+  };
+
+  const handleCancel = () => {
+    setEditingName(false);
+    setNewName("");
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -117,12 +165,21 @@ export default function LeaderboardPage() {
               {leaderboard?.entries.map((entry) => (
                 <div
                   key={entry.rank}
-                  className="flex items-center px-5 py-4 hover:bg-muted/50 transition-colors"
+                  className={`flex items-center px-5 py-4 hover:bg-muted/50 transition-colors ${
+                    entry.isCurrentUser
+                      ? "bg-primary/5 border-l-2 border-l-primary"
+                      : ""
+                  }`}
                 >
                   <div className="w-10 text-muted-foreground font-mono text-sm">
                     {entry.rank}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 flex items-center gap-2">
+                    {entry.isCurrentUser && (
+                      <span className="shrink-0 inline-flex items-center px-2 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full">
+                        You
+                      </span>
+                    )}
                     <p
                       className={`truncate ${
                         entry.displayName
@@ -132,6 +189,28 @@ export default function LeaderboardPage() {
                     >
                       {entry.displayName || "Anonymous"}
                     </p>
+                    {entry.isCurrentUser && (
+                      <button
+                        onClick={handleStartEdit}
+                        className="shrink-0 p-1 text-muted-foreground hover:text-foreground transition-colors"
+                        title="Edit display name"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" />
+                          <path d="m15 5 4 4" />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                   <div className="hidden sm:block text-muted-foreground text-sm mr-6">
                     {formatDate(entry.date)}
@@ -144,6 +223,56 @@ export default function LeaderboardPage() {
             </div>
           )}
         </div>
+
+        {/* Edit Name Modal */}
+        {editingName && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-card border border-border rounded-xl p-6 w-full max-w-md">
+              <h2 className="text-lg font-semibold text-foreground mb-4">
+                Edit Display Name
+              </h2>
+              <input
+                type="text"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="Enter your display name"
+                maxLength={50}
+                className="w-full px-4 py-2 bg-background border border-border rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary mb-4"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleSave();
+                  if (e.key === "Escape") handleCancel();
+                }}
+              />
+              <p className="text-xs text-muted-foreground mb-4">
+                Leave empty to appear as &quot;Anonymous&quot;
+              </p>
+              {updateNameMutation.error && (
+                <p className="text-sm text-destructive mb-4">
+                  {updateNameMutation.error instanceof Error
+                    ? updateNameMutation.error.message
+                    : "Failed to update name"}
+                </p>
+              )}
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={handleCancel}
+                  disabled={updateNameMutation.isPending}
+                  className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={updateNameMutation.isPending}
+                  className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+                >
+                  {updateNameMutation.isPending ? "Saving..." : "Save"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
