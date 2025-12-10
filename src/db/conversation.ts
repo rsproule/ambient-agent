@@ -482,6 +482,12 @@ export async function getConversationMessages(
           }
         }
 
+        // Check if user already has a payout
+        const existingPayout = await prisma.payout.findUnique({
+          where: { userId: user.id },
+          select: { id: true },
+        });
+
         systemState = {
           currentTime: getCurrentTimeInfo(
             userTimezone || "America/Los_Angeles",
@@ -497,6 +503,7 @@ export async function getConversationMessages(
           outboundOptIn: user.outboundOptIn,
           timezoneSource: userTimezone ? "known" : "default",
           isOnboarding: !user.hasCompletedOnboarding,
+          hasExistingPayout: !!existingPayout,
         };
       }
     } catch (error) {

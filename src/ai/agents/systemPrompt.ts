@@ -169,6 +169,7 @@ export interface SystemState {
 
   // Onboarding status
   isOnboarding?: boolean; // Whether user is still in onboarding flow
+  hasExistingPayout?: boolean; // Whether user has already received a payout
 }
 
 /**

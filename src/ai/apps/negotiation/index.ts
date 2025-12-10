@@ -49,8 +49,11 @@ export const negotiationApp: AppDefinition = {
   systemPrompt: NEGOTIATION_PROMPT,
 
   shouldActivate: (context) => {
-    // Auto-activate for new users in onboarding
-    return context.systemState?.isOnboarding === true;
+    // Auto-activate for new users in onboarding, but only if they haven't received a payout
+    return (
+      context.systemState?.isOnboarding === true &&
+      context.systemState?.hasExistingPayout !== true
+    );
   },
   agent: negotiationAgent,
 };
