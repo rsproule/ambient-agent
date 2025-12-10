@@ -21,6 +21,7 @@ export { createCompleteOnboardingTool } from "./completeOnboarding";
 export { createGenerateConnectionLinkTool } from "./generateConnectionLink";
 export { createGetUserContextTool } from "./getUserContext";
 export { createGroupChatSettingsTools } from "./groupChatSettings";
+export { createNegotiationTools } from "./negotiation";
 export { createRequestFeatureTool } from "./requestFeature";
 export { createRequestResearchTool } from "./requestResearch";
 export { createScheduledJobTools } from "./scheduledJob";

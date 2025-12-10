@@ -5,6 +5,7 @@ export interface User {
   phoneNumber?: string;
   name?: string;
   email?: string;
+  walletAddress?: string;
   hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -234,6 +235,7 @@ function formatUser(user: {
   phoneNumber: string | null;
   name: string | null;
   email: string | null;
+  walletAddress: string | null;
   hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -243,6 +245,7 @@ function formatUser(user: {
     phoneNumber: user.phoneNumber ?? undefined,
     name: user.name ?? undefined,
     email: user.email ?? undefined,
+    walletAddress: user.walletAddress ?? undefined,
     hasCompletedOnboarding: user.hasCompletedOnboarding,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,

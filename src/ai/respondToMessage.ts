@@ -8,6 +8,7 @@ import {
   createGitHubTools,
   createGmailTools,
   createGroupChatSettingsTools,
+  createNegotiationTools,
   createRequestFeatureTool,
   createRequestResearchTool,
   createScheduledJobTools,
@@ -91,6 +92,8 @@ export async function respondToMessage(
     completeOnboarding: createCompleteOnboardingTool(context),
     switchApp: createSwitchAppTool(context),
     ...createScheduledJobTools(context),
+    // Negotiation tools (available when negotiation app is active)
+    ...createNegotiationTools(context),
   };
 
   // Add DM-only tools (connection link not available in groups to prevent spam)
