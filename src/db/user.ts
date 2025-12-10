@@ -6,6 +6,7 @@ export interface User {
   name?: string;
   email?: string;
   walletAddress?: string;
+  workspaceUsername?: string;
   hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -228,6 +229,78 @@ export async function hasCompletedOnboarding(
 }
 
 /**
+ * Check if a workspace username is available
+ */
+export async function isWorkspaceUsernameAvailable(
+  username: string,
+): Promise<boolean> {
+  const existing = await prisma.user.findUnique({
+    where: { workspaceUsername: username },
+    select: { id: true },
+  });
+  return !existing;
+}
+
+/**
+ * Get user by workspace username
+ */
+export async function getUserByWorkspaceUsername(
+  username: string,
+): Promise<User | null> {
+  const user = await prisma.user.findUnique({
+    where: { workspaceUsername: username },
+  });
+  return user ? formatUser(user) : null;
+}
+
+/**
+ * Claim a workspace username for a user
+ * Returns the updated user or throws if username is taken
+ */
+export async function claimWorkspaceUsername(
+  userId: string,
+  username: string,
+): Promise<User> {
+  // Validate username format
+  if (!/^[a-zA-Z0-9_-]+$/.test(username)) {
+    throw new Error(
+      "Invalid username. Use only letters, numbers, underscores, and hyphens.",
+    );
+  }
+
+  if (username.length < 2 || username.length > 39) {
+    throw new Error("Username must be between 2 and 39 characters.");
+  }
+
+  // Check if username is available
+  const isAvailable = await isWorkspaceUsernameAvailable(username);
+  if (!isAvailable) {
+    throw new Error(`Username "${username}" is already taken.`);
+  }
+
+  // Update user with the new workspace username
+  const user = await prisma.user.update({
+    where: { id: userId },
+    data: { workspaceUsername: username },
+  });
+
+  return formatUser(user);
+}
+
+/**
+ * Get workspace username for a user
+ */
+export async function getWorkspaceUsername(
+  userId: string,
+): Promise<string | null> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { workspaceUsername: true },
+  });
+  return user?.workspaceUsername ?? null;
+}
+
+/**
  * Format user from database to application format
  */
 function formatUser(user: {
@@ -236,6 +309,7 @@ function formatUser(user: {
   name: string | null;
   email: string | null;
   walletAddress: string | null;
+  workspaceUsername: string | null;
   hasCompletedOnboarding: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -246,6 +320,7 @@ function formatUser(user: {
     name: user.name ?? undefined,
     email: user.email ?? undefined,
     walletAddress: user.walletAddress ?? undefined,
+    workspaceUsername: user.workspaceUsername ?? undefined,
     hasCompletedOnboarding: user.hasCompletedOnboarding,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,

@@ -71,6 +71,7 @@ model User {
   isAdmin                Boolean        @default(false) // Admin access for admin routes
   outboundOptIn          Boolean? // null = not asked, true = opted in, false = opted out
   hasCompletedOnboarding Boolean        @default(false) // Whether user has completed the onboarding flow
+  workspaceUsername      String?        @unique // Claimed username for MeritSpace workspace (repo: MeritSpace/{workspaceUsername})
   connections            Connection[] // User's connected accounts
   accounts               Account[] // OAuth accounts
   sessions               Session[] // User sessions

@@ -27,6 +27,7 @@ export { createRequestResearchTool } from "./requestResearch";
 export { createScheduledJobTools } from "./scheduledJob";
 export { createSwitchAppTool } from "./switchApp";
 export { createUpdateUserContextTool } from "./updateUserContext";
+export { createWorkspaceTools } from "./workspace";
 
 // Static tools (no context needed - Claude can see images directly)
 export { createImageTool } from "./createImage";
