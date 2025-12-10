@@ -57,7 +57,7 @@ export async function handleExecuteTask(
   env: Env,
 ): Promise<Response> {
   try {
-    const body = await request.json<TaskRequest>();
+    const body = (await request.json()) as TaskRequest;
     const { repo, task, branch = "main" } = body;
 
     if (!task) {
@@ -81,6 +81,13 @@ export async function handleExecuteTask(
     // Sanitize username to prevent command injection
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
       return new Response("Invalid username in repo path", { status: 400 });
+    }
+
+    // Sanitize branch name to prevent command injection
+    // Git branch names can contain: alphanumeric, -, _, /, .
+    // But cannot contain: space, ~, ^, :, ?, *, [, \, or start with -
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(branch) || branch.length > 255) {
+      return new Response("Invalid branch name", { status: 400 });
     }
 
     // Open sandbox with unique ID
