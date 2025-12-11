@@ -64,6 +64,16 @@ export function WorkspaceCard({ onClaimed, onReset }: WorkspaceCardProps) {
         `/api/workspace/check?username=${encodeURIComponent(username)}`,
       );
       const data = await response.json();
+
+      // Handle error responses properly
+      if (!response.ok) {
+        setAvailability({
+          available: false,
+          reason: data.error || "Failed to check availability",
+        });
+        return;
+      }
+
       setAvailability(data);
     } catch {
       setAvailability(null);

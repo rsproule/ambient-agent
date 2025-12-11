@@ -7,7 +7,7 @@
 import {
   claimWorkspaceUsername,
   getWorkspaceUsername,
-  isWorkspaceUsernameAvailable,
+  unclaimWorkspaceUsername,
 } from "@/src/db/user";
 import { auth } from "@/src/lib/auth/config";
 import {
@@ -27,7 +27,9 @@ export async function GET() {
 
     return NextResponse.json({
       workspaceUsername,
-      repoUrl: workspaceUsername ? getWorkspaceRepoUrl(workspaceUsername) : null,
+      repoUrl: workspaceUsername
+        ? getWorkspaceRepoUrl(workspaceUsername)
+        : null,
     });
   } catch (error) {
     console.error("Error fetching workspace:", error);
@@ -67,11 +69,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check availability
-    const isAvailable = await isWorkspaceUsernameAvailable(normalizedUsername);
-    if (!isAvailable) {
+    // Claim username in DB first (atomic, uses unique constraint)
+    // This prevents race conditions where two users try to claim the same username
+    let user;
+    try {
+      user = await claimWorkspaceUsername(session.user.id, normalizedUsername);
+    } catch (error) {
+      // Username already taken (unique constraint violation)
       return NextResponse.json(
-        { error: `Username "${normalizedUsername}" is already taken` },
+        {
+          error:
+            error instanceof Error
+              ? error.message
+              : `Username "${normalizedUsername}" is already taken`,
+        },
         { status: 400 },
       );
     }
@@ -79,17 +90,13 @@ export async function POST(request: NextRequest) {
     // Create GitHub repo with default structure
     const repoResult = await createWorkspaceRepo(normalizedUsername);
     if (!repoResult.success) {
+      // Rollback: unclaim the username since GitHub repo creation failed
+      await unclaimWorkspaceUsername(session.user.id);
       return NextResponse.json(
         { error: repoResult.error || "Failed to create workspace repository" },
         { status: 500 },
       );
     }
-
-    // Claim the username in the database
-    const user = await claimWorkspaceUsername(
-      session.user.id,
-      normalizedUsername,
-    );
 
     return NextResponse.json({
       success: true,
@@ -99,7 +106,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error claiming workspace:", error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to claim workspace" },
+      {
+        error:
+          error instanceof Error ? error.message : "Failed to claim workspace",
+      },
       { status: 500 },
     );
   }

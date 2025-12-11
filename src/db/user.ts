@@ -256,6 +256,7 @@ export async function getUserByWorkspaceUsername(
 /**
  * Claim a workspace username for a user
  * Returns the updated user or throws if username is taken
+ * Uses unique constraint for atomic claim (no race condition)
  */
 export async function claimWorkspaceUsername(
   userId: string,
@@ -272,19 +273,30 @@ export async function claimWorkspaceUsername(
     throw new Error("Username must be between 2 and 39 characters.");
   }
 
-  // Check if username is available
-  const isAvailable = await isWorkspaceUsernameAvailable(username);
-  if (!isAvailable) {
-    throw new Error(`Username "${username}" is already taken.`);
+  try {
+    // Directly try to update - unique constraint ensures atomicity
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { workspaceUsername: username },
+    });
+    return formatUser(user);
+  } catch (error) {
+    // Check if it's a unique constraint violation
+    if (error instanceof Error && error.message.includes("Unique constraint")) {
+      throw new Error(`Username "${username}" is already taken.`);
+    }
+    throw error;
   }
+}
 
-  // Update user with the new workspace username
-  const user = await prisma.user.update({
+/**
+ * Unclaim a workspace username (for rollback if GitHub repo creation fails)
+ */
+export async function unclaimWorkspaceUsername(userId: string): Promise<void> {
+  await prisma.user.update({
     where: { id: userId },
-    data: { workspaceUsername: username },
+    data: { workspaceUsername: null },
   });
-
-  return formatUser(user);
 }
 
 /**
