@@ -1,3 +1,7 @@
+packages:
+  - '.'
+  - 'claudflare'
+
 onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'

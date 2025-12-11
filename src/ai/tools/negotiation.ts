@@ -376,6 +376,7 @@ export function createFinalizeNegotiationTool(context: ConversationContext) {
           message: `Successfully sent $${offer.amount} USDC! Check your balance at: ${balancePageUrl}`,
         };
       } catch (error) {
+        console.error(JSON.stringify(error, null, 2));
         return {
           success: false,
           message: `Failed to finalize negotiation: ${

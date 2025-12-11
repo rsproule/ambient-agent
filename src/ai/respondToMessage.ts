@@ -14,6 +14,7 @@ import {
   createScheduledJobTools,
   createSwitchAppTool,
   createUpdateUserContextTool,
+  createWorkspaceTools,
 } from "@/src/ai/tools";
 import { hasActiveConnections } from "@/src/ai/tools/helpers";
 import type { ConversationContext } from "@/src/db/conversation";
@@ -94,6 +95,8 @@ export async function respondToMessage(
     ...createScheduledJobTools(context),
     // Negotiation tools (available when negotiation app is active)
     ...createNegotiationTools(context),
+    // Workspace tools (claim/manage Claude workspace)
+    ...createWorkspaceTools(context),
   };
 
   // Add DM-only tools (connection link not available in groups to prevent spam)

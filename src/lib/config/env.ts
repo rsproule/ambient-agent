@@ -47,6 +47,13 @@ const envSchema = z.object({
   PAYOUT_WALLET_PRIVATE_KEY: z.string().optional(),
   PAYOUT_WALLET_ADDRESS: z.string().optional(),
 
+  // Claude Code Worker configuration
+  CLAUDE_CODE_WORKER_URL: z.string().url().optional(),
+  CLAUDE_CODE_API_SECRET: z.string().optional(), // Shared secret for worker auth
+
+  // MeritSpace GitHub configuration (for workspace creation)
+  MERITSPACE_GITHUB_TOKEN: z.string().optional(), // merit-bot token with org repo creation scope
+
   // Node environment
   NODE_ENV: z
     .enum(["development", "production", "test"])
@@ -165,6 +172,22 @@ export const payoutConfig = {
   get walletAddress() {
     return env.PAYOUT_WALLET_ADDRESS;
   },
+};
+
+export const claudeCodeConfig = {
+  get workerUrl() {
+    return env.CLAUDE_CODE_WORKER_URL;
+  },
+  get apiSecret() {
+    return env.CLAUDE_CODE_API_SECRET;
+  },
+};
+
+export const meritSpaceConfig = {
+  get githubToken() {
+    return env.MERITSPACE_GITHUB_TOKEN;
+  },
+  org: "MeritSpace",
 };
 
 export type Env = z.infer<typeof envSchema>;

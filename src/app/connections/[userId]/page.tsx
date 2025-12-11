@@ -1,6 +1,7 @@
 "use client";
 
 import { ConnectionCard } from "@/src/components/connections/ConnectionCard";
+import { WorkspaceCard } from "@/src/components/connections/WorkspaceCard";
 import { Loader } from "@/src/components/loader";
 import {
   getAllProviders,
@@ -185,6 +186,20 @@ export default function ConnectionsPage({
       )}
 
       <div className="border rounded-lg px-4">
+        <WorkspaceCard
+          onClaimed={() =>
+            setNotification({
+              type: "success",
+              message: "Workspace claimed successfully!",
+            })
+          }
+          onReset={() =>
+            setNotification({
+              type: "success",
+              message: "Workspace reset to initial state!",
+            })
+          }
+        />
         {providers.map((provider) => {
           const connection = connections.find(
             (c) => c.provider === provider.id,
