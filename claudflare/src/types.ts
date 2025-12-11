@@ -5,6 +5,7 @@ export interface Env {
   GITHUB_TOKEN: string;
   API_SECRET: string;
   DEFAULT_BRANCH?: string; // Default branch for repos (defaults to "master")
+  MERIT_API_URL?: string; // URL for sandbox to callback to main API
   Sandbox: DurableObjectNamespace<Sandbox>;
 }
 

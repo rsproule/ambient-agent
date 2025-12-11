@@ -16,31 +16,54 @@ async function consumeAndCleanup(
   stream: ReadableStream<Uint8Array>,
   sandbox: SandboxType,
   worktreePath: string,
+  requestId: string,
   task: string,
 ): Promise<void> {
   const reader = stream.getReader();
-  const chunks: string[] = [];
+  const events: string[] = [];
   const decoder = new TextDecoder();
+  let buffer = "";
 
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      chunks.push(decoder.decode(value, { stream: true }));
+
+      // Accumulate and split by newlines to get individual events
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      // Keep the last incomplete line in buffer
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (line.trim()) {
+          // Redact secrets and store each event as a line
+          const redacted = line.replace(/sk-ant-[a-zA-Z0-9_-]+/g, "[REDACTED]");
+          events.push(redacted);
+        }
+      }
     }
 
-    console.log("[consumeAndCleanup] Stream complete, writing log...");
+    // Don't forget any remaining buffer content
+    if (buffer.trim()) {
+      const redacted = buffer.replace(/sk-ant-[a-zA-Z0-9_-]+/g, "[REDACTED]");
+      events.push(redacted);
+    }
+
+    console.log(`[consumeAndCleanup] Stream complete, ${events.length} events`);
     const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
 
-    // Write log file (redact secrets)
+    // Write log file to main repo (not worktree) so it persists
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const logDir = `${worktreePath}/.logs`;
-    const logPath = `${logDir}/${timestamp}.json`;
-    const redacted = chunks
-      .join("")
-      .replace(/sk-ant-[a-zA-Z0-9_-]+/g, "[REDACTED]");
-    const logContent = JSON.stringify({ task, output: redacted });
-    const b64 = btoa(unescape(encodeURIComponent(logContent)));
+    const logDir = `${REPO_BASE}/.logs`;
+    const logPath = `${logDir}/${requestId}-${timestamp}.jsonl`;
+
+    // Create JSONL content: metadata line + each event on its own line
+    const logLines = [
+      JSON.stringify({ type: "metadata", task, requestId, timestamp }),
+      ...events,
+    ].join("\n");
+    const b64 = btoa(unescape(encodeURIComponent(logLines)));
 
     await runCmd(sandbox, run(`mkdir -p ${logDir}`), "mkdir-logs");
     await runCmd(
@@ -48,6 +71,37 @@ async function consumeAndCleanup(
       run(`bash -c 'echo "${b64}" | base64 -d > ${logPath}'`),
       "write-log",
     );
+
+    // Commit and push logs to repo (with retry for concurrent pushes)
+    console.log("[consumeAndCleanup] Committing logs...");
+    await runCmd(
+      sandbox,
+      run(`git -C ${REPO_BASE} add .logs/`),
+      "git-add-logs",
+    );
+    const commitResult = await runCmd(
+      sandbox,
+      run(`git -C ${REPO_BASE} diff --cached --quiet; echo $?`),
+      "git-check-staged",
+    );
+    if (commitResult.stdout.trim() !== "0") {
+      await runCmd(
+        sandbox,
+        run(`git -C ${REPO_BASE} commit -m "logs: ${requestId}"`),
+        "git-commit-logs",
+      );
+      // Pull-rebase then push to handle concurrent log commits
+      await runCmd(
+        sandbox,
+        run(`git -C ${REPO_BASE} pull --rebase origin HEAD || true`),
+        "git-pull-logs",
+      );
+      await runCmd(
+        sandbox,
+        run(`git -C ${REPO_BASE} push origin HEAD`),
+        "git-push-logs",
+      );
+    }
 
     // Cleanup: remove worktree after task completes
     console.log("[consumeAndCleanup] Removing worktree...");
@@ -166,7 +220,12 @@ export async function handleExecuteTask(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { ANTHROPIC_API_KEY, GITHUB_TOKEN, DEFAULT_BRANCH = "master" } = env;
+  const {
+    ANTHROPIC_API_KEY,
+    GITHUB_TOKEN,
+    DEFAULT_BRANCH = "master",
+    MERIT_API_URL = "",
+  } = env;
   if (!ANTHROPIC_API_KEY)
     return new Response("ANTHROPIC_API_KEY not set", { status: 500 });
   if (!GITHUB_TOKEN)
@@ -192,11 +251,21 @@ export async function handleExecuteTask(
         status: 400,
       });
 
+    // Request ID from caller - used for worktree and sandbox auth back to API
+    const requestId = request.headers.get("X-Request-ID");
+    if (!requestId) {
+      return new Response("X-Request-ID header required", { status: 400 });
+    }
+
     // Use username as sessionId to reuse sandbox per user (warm starts)
     const sandbox = getSandbox(env.Sandbox, username);
-    const requestId = crypto.randomUUID().slice(0, 8);
 
-    await sandbox.setEnvVars({ ANTHROPIC_API_KEY, GITHUB_TOKEN });
+    await sandbox.setEnvVars({
+      ANTHROPIC_API_KEY,
+      GITHUB_TOKEN,
+      MERIT_REQUEST_ID: requestId,
+      MERIT_API_URL,
+    });
     await ensureUser(sandbox);
     await setupMainRepo(sandbox, GITHUB_TOKEN, repo);
     const worktreePath = await createWorktree(sandbox, branch, requestId);
@@ -232,7 +301,13 @@ export async function handleExecuteTask(
 
     // Background: consume stream and cleanup worktree when done
     ctx.waitUntil(
-      consumeAndCleanup(backgroundStream, sandbox, worktreePath, task),
+      consumeAndCleanup(
+        backgroundStream,
+        sandbox,
+        worktreePath,
+        requestId,
+        task,
+      ),
     );
 
     // HTTP response: optional observer, can disconnect without affecting the task
