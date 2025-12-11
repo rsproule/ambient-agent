@@ -1,6 +1,6 @@
 packages:
   - '.'
-  - 'claude-code-worker'
+  - 'claudflare'
 
 onlyBuiltDependencies:
   - '@prisma/client'

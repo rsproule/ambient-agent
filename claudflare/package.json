@@ -14,7 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/sandbox": "^0.6.3",
-    "@cloudflare/workers-types": "^4.20251202.0",
+    "@cloudflare/workers-types": "^4.20251211.0",
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3",
     "wrangler": "^4.53.0"
