@@ -15,54 +15,64 @@ function wrapWithCommit(
   task: string,
 ): ReadableStream<Uint8Array> {
   const reader = stream.getReader();
+  const chunks: string[] = [];
+  const decoder = new TextDecoder();
 
   return new ReadableStream({
     async pull(controller) {
       const { done, value } = await reader.read();
 
       if (done) {
-        console.log("Stream complete, committing...");
+        console.log("[wrapWithCommit] Stream complete, writing log...");
         const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
 
+        // Write log file (redact secrets)
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const logDir = `${WORKSPACE}/.logs`;
+        const logPath = `${logDir}/${timestamp}.json`;
+        const redacted = chunks
+          .join("")
+          .replace(/sk-ant-[a-zA-Z0-9_-]+/g, "[REDACTED]");
+        const logContent = JSON.stringify({ task, output: redacted });
+        const b64 = btoa(unescape(encodeURIComponent(logContent)));
+
+        await runCmd(sandbox, run(`mkdir -p ${logDir}`), "mkdir-logs");
+        await runCmd(
+          sandbox,
+          run(`bash -c 'echo "${b64}" | base64 -d > ${logPath}'`),
+          "write-log",
+        );
+
+        // Commit and push
         const msg = `Claude: ${task.substring(0, 50)}${
           task.length > 50 ? "..." : ""
         }`;
-        const add = await runCmd(
-          sandbox,
-          run(`git -C ${WORKSPACE} add -A`),
-          "git-add",
-        );
-        console.log("git add:", add.success);
+        await runCmd(sandbox, run(`git -C ${WORKSPACE} add -A`), "git-add");
 
         const diff = await runCmd(
           sandbox,
           run(`git -C ${WORKSPACE} diff --cached --quiet; echo $?`),
           "git-diff",
         );
-        console.log("git diff:", diff.stdout.trim());
-
         if (diff.stdout.trim() !== "0") {
-          const commit = await runCmd(
+          await runCmd(
             sandbox,
             run(`git -C ${WORKSPACE} commit -m "${escapeShell(msg)}"`),
             "git-commit",
           );
-          console.log("git commit:", commit.success, commit.stderr);
-
-          const push = await runCmd(
+          await runCmd(
             sandbox,
             run(`git -C ${WORKSPACE} push origin ${branch}`),
             "git-push",
           );
-          console.log("git push:", push.success, push.stderr);
-        } else {
-          console.log("No changes to commit");
         }
 
         controller.close();
         return;
       }
 
+      // Capture for logging
+      chunks.push(decoder.decode(value, { stream: true }));
       controller.enqueue(value);
     },
     cancel() {
