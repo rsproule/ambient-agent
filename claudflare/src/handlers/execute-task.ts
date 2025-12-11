@@ -7,19 +7,33 @@ import { escapeShell } from "../utils/strings";
 const USERNAME = "rsproule";
 const REPO = `MeritSpace/${USERNAME}`;
 
-function wrapWithAutoCommit(
+function wrapWithLoggingAndCommit(
   stream: ReadableStream<Uint8Array>,
   sandbox: SandboxType,
   branch: string,
   task: string,
 ): ReadableStream<Uint8Array> {
   const reader = stream.getReader();
+  const chunks: string[] = [];
+  const decoder = new TextDecoder();
 
   return new ReadableStream({
     async pull(controller) {
       const { done, value } = await reader.read();
 
       if (done) {
+        // Write log file
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const logPath = `/repo/.logs/${timestamp}.json`;
+        const logContent = JSON.stringify({ task, output: chunks }, null, 2);
+        await runCmd(sandbox, "mkdir -p /repo/.logs", "mkdir-logs");
+        await runCmd(
+          sandbox,
+          `cat > ${logPath} << 'LOGEOF'\n${logContent}\nLOGEOF`,
+          "write-log",
+        );
+
+        // Commit and push
         const msg = `Claude: ${task.substring(0, 50)}${
           task.length > 50 ? "..." : ""
         }`;
@@ -46,6 +60,10 @@ function wrapWithAutoCommit(
         controller.close();
         return;
       }
+
+      // Capture for logging
+      const text = decoder.decode(value, { stream: true });
+      chunks.push(text);
 
       controller.enqueue(value);
     },
@@ -132,12 +150,15 @@ export async function handleExecuteTask(
 
     const stream = await sandbox.execStream(cmd);
 
-    return new Response(wrapWithAutoCommit(stream, sandbox, branch, task), {
-      headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
+    return new Response(
+      wrapWithLoggingAndCommit(stream, sandbox, branch, task),
+      {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+        },
       },
-    });
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return new Response(`Error: ${msg}`, { status: 500 });

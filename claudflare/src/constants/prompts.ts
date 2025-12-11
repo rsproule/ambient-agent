@@ -7,7 +7,7 @@ Directory structure:
 - notes/ - Documentation and notes
 - servers/ - Code for hosted servers
 - apps/ - Code for hosted webapps
-- .logs/ - Execution logs (auto-generated)
+- .logs/ - Execution logs (prompts, responses, tool calls - auto-generated)
 - .claude/ - Claude configuration and state
 
 Changes are auto-committed and pushed when done. gh CLI is available.
