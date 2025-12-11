@@ -23,9 +23,11 @@ export async function POST() {
       );
     }
 
+    console.log("Resetting workspace for:", workspaceUsername);
     const result = await resetWorkspaceRepo(workspaceUsername);
 
     if (!result.success) {
+      console.error("Workspace reset failed:", result.error);
       return NextResponse.json(
         { error: result.error || "Failed to reset workspace" },
         { status: 500 },
