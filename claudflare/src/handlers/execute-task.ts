@@ -237,8 +237,8 @@ export async function handleExecuteTask(
       return new Response("X-Request-ID header required", { status: 400 });
     }
 
-    // Use username as sessionId to reuse sandbox per user (warm starts)
-    const sandbox = getSandbox(env.Sandbox, username);
+    // Use requestId for sandbox to allow parallel requests (each gets own sandbox)
+    const sandbox = getSandbox(env.Sandbox, requestId);
 
     await sandbox.setEnvVars({
       ANTHROPIC_API_KEY,
