@@ -1,5 +1,6 @@
 "use client";
 
+import { Loader } from "@/src/components/loader";
 import { Button } from "@/src/components/ui/button";
 import {
   Dialog,
@@ -11,15 +12,15 @@ import {
 import { Input } from "@/src/components/ui/input";
 import { Label } from "@/src/components/ui/label";
 import { Switch } from "@/src/components/ui/switch";
-import { Loader } from "@/src/components/loader";
 import {
   Clock,
-  Trash2,
-  Play,
+  Link2Off,
+  Loader2,
   Pencil,
+  Play,
   Shield,
   Sparkles,
-  Link2Off,
+  Trash2,
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -53,6 +54,7 @@ export default function ScheduledJobsPage() {
     notifyMode: "significant" as "always" | "significant",
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [triggeringJobId, setTriggeringJobId] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -89,7 +91,7 @@ export default function ScheduledJobsPage() {
         body: JSON.stringify({ enabled }),
       });
       setJobs((prev) =>
-        prev.map((j) => (j.id === jobId ? { ...j, enabled } : j))
+        prev.map((j) => (j.id === jobId ? { ...j, enabled } : j)),
       );
     } catch (error) {
       console.error("Error toggling job:", error);
@@ -108,6 +110,32 @@ export default function ScheduledJobsPage() {
       setJobs((prev) => prev.filter((j) => j.id !== jobId));
     } catch (error) {
       console.error("Error deleting job:", error);
+    }
+  };
+
+  const handleTriggerJob = async (jobId: string, jobName: string) => {
+    setTriggeringJobId(jobId);
+    try {
+      const response = await fetch(
+        `/api/connections/scheduled-jobs/${jobId}/trigger`,
+        {
+          method: "POST",
+        },
+      );
+      if (response.ok) {
+        // Show brief success feedback - the job will send a message when done
+        alert(
+          `"${jobName}" triggered! You'll receive the result via iMessage.`,
+        );
+      } else {
+        const data = await response.json();
+        alert(`Failed to trigger job: ${data.error || "Unknown error"}`);
+      }
+    } catch (error) {
+      console.error("Error triggering job:", error);
+      alert("Failed to trigger job");
+    } finally {
+      setTriggeringJobId(null);
     }
   };
 
@@ -132,7 +160,7 @@ export default function ScheduledJobsPage() {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(editForm),
-        }
+        },
       );
 
       if (response.ok) {
@@ -148,8 +176,8 @@ export default function ScheduledJobsPage() {
                   notifyMode: data.job.notifyMode,
                   nextRunAt: data.job.nextRunAt,
                 }
-              : j
-          )
+              : j,
+          ),
         );
         setEditingJob(null);
       }
@@ -323,6 +351,20 @@ export default function ScheduledJobsPage() {
                     <Button
                       variant="ghost"
                       size="sm"
+                      onClick={() => handleTriggerJob(job.id, job.name)}
+                      disabled={triggeringJobId === job.id}
+                      className="text-muted-foreground hover:text-green-600"
+                      title="Run now"
+                    >
+                      {triggeringJobId === job.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Play className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleEditClick(job)}
                       className="text-muted-foreground hover:text-foreground"
                     >
@@ -400,8 +442,8 @@ export default function ScheduledJobsPage() {
                 placeholder="0 9 * * *"
               />
               <p className="text-xs text-muted-foreground">
-                e.g., &quot;0 9 * * *&quot; = every day at 9am,
-                &quot;0 * * * *&quot; = every hour
+                e.g., &quot;0 9 * * *&quot; = every day at 9am, &quot;0 * * *
+                *&quot; = every hour
               </p>
             </div>
 

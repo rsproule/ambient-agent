@@ -1,4 +1,5 @@
 import {
+  acquireResponseLock,
   isCurrentGeneration,
   releaseResponseLock,
   saveAssistantMessage,
@@ -37,6 +38,15 @@ export const handleMessageResponse = task({
       success: boolean;
       error?: string;
     }> = [];
+
+    // Acquire lock so we don't get interrupted by stale checks
+    // This ensures the taskId matches what isCurrentGeneration expects
+    await acquireResponseLock(
+      payload.conversationId,
+      payload.taskId,
+      payload.sender,
+      payload.isGroup,
+    );
 
     try {
       // Execute each action in sequence
