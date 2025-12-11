@@ -4,7 +4,6 @@ export interface Env {
   ANTHROPIC_API_KEY: string;
   GITHUB_TOKEN: string;
   API_SECRET: string;
-  DEFAULT_BRANCH?: string; // Default branch for repos (defaults to "master")
   MERIT_API_URL?: string; // URL for sandbox to callback to main API
   Sandbox: DurableObjectNamespace<Sandbox>;
 }
@@ -12,7 +11,6 @@ export interface Env {
 export interface TaskRequest {
   repo: string; // Full repo path: "MeritSpace/{username}"
   task: string; // The task/prompt for Claude
-  branch?: string; // Optional branch (default: env.DEFAULT_BRANCH or "master")
 }
 
 export interface ExecutionResult {

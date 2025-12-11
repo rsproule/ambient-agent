@@ -173,39 +173,25 @@ async function setupMainRepo(
 }
 
 /**
- * Creates a worktree for this request on the specified branch.
- * Returns the path to the worktree.
+ * Creates a worktree for this request based on latest master.
+ * Claude works here and then merges changes back to master.
  */
 async function createWorktree(
   sandbox: SandboxType,
-  branch: string,
   requestId: string,
 ): Promise<string> {
   const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
   const worktreePath = `${WORKTREES_BASE}/${requestId}`;
+  const localBranch = `worktree-${requestId}`;
 
-  // Check if branch exists on remote
-  const remoteRef = await runCmd(
+  // Always base worktree on latest origin/master
+  await runCmd(
     sandbox,
-    run(`git -C ${REPO_BASE} ls-remote --heads origin ${branch}`),
-    "check-remote-branch",
+    run(
+      `git -C ${REPO_BASE} worktree add -b ${localBranch} ${worktreePath} origin/master`,
+    ),
+    "worktree-add",
   );
-
-  if (remoteRef.stdout.includes(branch)) {
-    // Branch exists on remote, create worktree tracking it
-    await runCmd(
-      sandbox,
-      run(`git -C ${REPO_BASE} worktree add ${worktreePath} origin/${branch}`),
-      "worktree-add-existing",
-    );
-  } else {
-    // Branch doesn't exist, create new branch in worktree
-    await runCmd(
-      sandbox,
-      run(`git -C ${REPO_BASE} worktree add -b ${branch} ${worktreePath}`),
-      "worktree-add-new",
-    );
-  }
 
   return worktreePath;
 }
@@ -220,12 +206,7 @@ export async function handleExecuteTask(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const {
-    ANTHROPIC_API_KEY,
-    GITHUB_TOKEN,
-    DEFAULT_BRANCH = "master",
-    MERIT_API_URL = "",
-  } = env;
+  const { ANTHROPIC_API_KEY, GITHUB_TOKEN, MERIT_API_URL = "" } = env;
   if (!ANTHROPIC_API_KEY)
     return new Response("ANTHROPIC_API_KEY not set", { status: 500 });
   if (!GITHUB_TOKEN)
@@ -235,9 +216,8 @@ export async function handleExecuteTask(
     const body = (await request.json()) as {
       task?: string;
       repo?: string;
-      branch?: string;
     };
-    const { task, repo, branch = DEFAULT_BRANCH } = body;
+    const { task, repo } = body;
     if (!task) return new Response("task required", { status: 400 });
     if (!repo)
       return new Response("repo required (format: owner/name)", {
@@ -268,7 +248,7 @@ export async function handleExecuteTask(
     });
     await ensureUser(sandbox);
     await setupMainRepo(sandbox, GITHUB_TOKEN, repo);
-    const worktreePath = await createWorktree(sandbox, branch, requestId);
+    const worktreePath = await createWorktree(sandbox, requestId);
 
     // Create ~/workspace symlink pointing to this worktree for convenience
     const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
@@ -278,7 +258,7 @@ export async function handleExecuteTask(
       "symlink-workspace",
     );
 
-    const systemPrompt = escapeShell(WORKSPACE_SYSTEM(username, branch));
+    const systemPrompt = escapeShell(WORKSPACE_SYSTEM(username));
     const taskPrompt = escapeShell(task);
     const claudeCommand = [
       `cd ${worktreePath}`,
