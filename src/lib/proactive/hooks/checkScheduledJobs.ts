@@ -1,154 +1,24 @@
 /**
  * Scheduled Jobs Hook
  *
- * Finds and executes due scheduled jobs for a user
+ * Finds due scheduled jobs and triggers the runScheduledJob task for each.
+ * The task handles running the prompt through the agent (which decides what to do).
  */
 
+import prisma from "@/src/db/client";
 import {
+  calculateNextRun,
   getDueScheduledJobsForUser,
-  markJobFailed,
-  updateJobAfterRun,
-  type ScheduledJob,
 } from "@/src/db/scheduledJob";
-import { anthropic } from "@ai-sdk/anthropic";
-import { perplexity } from "@ai-sdk/perplexity";
-import { generateObject, generateText } from "ai";
-import { z } from "zod";
+import { runScheduledJob } from "@/src/trigger/tasks/runScheduledJob";
 import type { HookContext, HookResult } from "../types";
 
-interface SearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-}
-
 /**
- * Simple web search using Perplexity
- */
-async function simpleWebSearch(
-  query: string,
-  maxResults: number = 5,
-): Promise<{ success: boolean; results?: SearchResult[] }> {
-  try {
-    const { object } = await generateObject({
-      model: perplexity("sonar"),
-      schema: z.object({
-        results: z.array(
-          z.object({
-            title: z.string(),
-            url: z.string(),
-            snippet: z.string(),
-          }),
-        ),
-      }),
-      system:
-        "You are a search assistant. Return strictly the JSON schema provided. For each result include title, url, and a short snippet.",
-      prompt: `Search the web for: ${query}. Return up to ${maxResults} high-quality, diverse results with proper URLs.`,
-    });
-
-    return {
-      success: true,
-      results: object.results.slice(0, maxResults),
-    };
-  } catch (error) {
-    console.error("[simpleWebSearch] Error:", error);
-    return { success: false };
-  }
-}
-
-/**
- * Execute a scheduled job and determine if results are significant
- */
-async function executeScheduledJob(
-  job: ScheduledJob,
-  _context: HookContext, // eslint-disable-line @typescript-eslint/no-unused-vars
-): Promise<{
-  success: boolean;
-  result?: string;
-  isSignificant: boolean;
-  error?: string;
-}> {
-  try {
-    // Execute the job's prompt using web search
-    // Most scheduled jobs are research/news queries
-    const searchResults = await simpleWebSearch(job.prompt, 5);
-
-    if (!searchResults.success || !searchResults.results) {
-      return {
-        success: false,
-        isSignificant: false,
-        error: "Web search failed",
-      };
-    }
-
-    // Summarize the results
-    const resultsText = searchResults.results
-      .map(
-        (r: SearchResult, i: number) =>
-          `[${i + 1}] ${r.title}\n${r.snippet}${
-            r.url ? `\nSource: ${r.url}` : ""
-          }`,
-      )
-      .join("\n\n");
-
-    // Use LLM to determine if results are significant
-    const analysis = await generateText({
-      model: anthropic("claude-sonnet-4-5"),
-      prompt: `You are analyzing search results for a scheduled job.
-
-Job name: "${job.name}"
-Job prompt: "${job.prompt}"
-
-Search results:
-${resultsText}
-
-Previous result (for comparison):
-${
-  job.lastResult
-    ? JSON.stringify(job.lastResult)
-    : "None - this is the first run"
-}
-
-Analyze these results and determine:
-1. Is there anything new/significant worth sharing with the user?
-2. Create a brief, engaging summary of the most interesting findings.
-
-If this is news/updates content, focus on what's NEW since the last check.
-If results are mostly the same as before or not particularly interesting, say so.
-
-Response format:
-SIGNIFICANT: [yes/no]
-SUMMARY: [Your summary if significant, or "No significant updates" if not]`,
-    });
-
-    const isSignificant = analysis.text
-      .toLowerCase()
-      .includes("significant: yes");
-    const summaryMatch = analysis.text.match(/SUMMARY:\s*([\s\S]+)/i);
-    const summary = summaryMatch
-      ? summaryMatch[1].trim()
-      : "Search completed but no notable findings.";
-
-    return {
-      success: true,
-      result: summary,
-      isSignificant,
-    };
-  } catch (error) {
-    console.error(
-      `[executeScheduledJob] Error executing job ${job.id}:`,
-      error,
-    );
-    return {
-      success: false,
-      isSignificant: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    };
-  }
-}
-
-/**
- * Check for and execute due scheduled jobs
+ * Check for due scheduled jobs and trigger them
+ *
+ * This hook just finds due jobs and triggers the runScheduledJob task.
+ * The task handles everything: running the prompt through the agent,
+ * letting the agent decide what tools to use, and sending the response.
  */
 export async function checkScheduledJobs(
   context: HookContext,
@@ -161,76 +31,31 @@ export async function checkScheduledJobs(
       return { shouldNotify: false };
     }
 
-    // Process each due job
-    const results: Array<{
-      job: ScheduledJob;
-      result: string;
-      shouldNotify: boolean;
-    }> = [];
-
+    // Trigger the runScheduledJob task for each due job
+    // The task handles running the prompt through the agent and sending the response
     for (const job of dueJobs) {
       console.log(
-        `[checkScheduledJobs] Executing job: ${job.name} (${job.id})`,
+        `[checkScheduledJobs] Triggering job: ${job.name} (${job.id})`,
       );
 
-      const execution = await executeScheduledJob(job, context);
+      // Update nextRunAt immediately to prevent duplicate triggers
+      // (in case proactive check runs again before task completes)
+      const nextRunAt = calculateNextRun(job.cronSchedule, job.timezone);
+      await prisma.scheduledJob.update({
+        where: { id: job.id },
+        data: { nextRunAt },
+      });
 
-      if (execution.success) {
-        // Update job with results
-        await updateJobAfterRun(job.id, {
-          summary: execution.result,
-          isSignificant: execution.isSignificant,
-          executedAt: new Date().toISOString(),
-        });
-
-        // Determine if we should notify
-        const shouldNotify =
-          job.notifyMode === "always" ||
-          (job.notifyMode === "significant" && execution.isSignificant);
-
-        if (shouldNotify && execution.result) {
-          results.push({
-            job,
-            result: execution.result,
-            shouldNotify: true,
-          });
-        }
-      } else {
-        // Mark job as failed (but don't disable it)
-        await markJobFailed(job.id, false);
-        console.error(
-          `[checkScheduledJobs] Job ${job.id} failed: ${execution.error}`,
-        );
-      }
+      // Fire and forget - the task handles everything including notifications
+      await runScheduledJob.trigger({ jobId: job.id });
     }
 
-    // If no results to notify, we're done
-    if (results.length === 0) {
-      return { shouldNotify: false };
-    }
+    console.log(
+      `[checkScheduledJobs] Triggered ${dueJobs.length} job(s) for user ${context.userId}`,
+    );
 
-    // Build notification message for the first result
-    // (future: could batch multiple results)
-    const firstResult = results[0];
-    const signature = `scheduled:${firstResult.job.id}:${Date.now()}`;
-
-    const message =
-      `[SYSTEM: Scheduled job result - share with user in a friendly way]\n` +
-      `[${signature}]\n` +
-      `Scheduled job "${firstResult.job.name}" has completed.\n` +
-      `Results: ${firstResult.result}`;
-
-    return {
-      shouldNotify: true,
-      message,
-      contentSignature: signature,
-      metadata: {
-        jobId: firstResult.job.id,
-        jobName: firstResult.job.name,
-        totalJobsRun: dueJobs.length,
-        totalWithResults: results.length,
-      },
-    };
+    // Don't notify from the hook - the runScheduledJob task handles sending messages
+    return { shouldNotify: false };
   } catch (error) {
     console.error("[checkScheduledJobs] Error checking scheduled jobs:", error);
     return { shouldNotify: false };
