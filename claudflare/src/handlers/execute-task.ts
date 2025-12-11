@@ -161,9 +161,21 @@ export async function handleExecuteTask(
 
     const systemPrompt = escapeShell(WORKSPACE_SYSTEM(USERNAME));
     const taskPrompt = escapeShell(task);
-    const cmd = `cd ${WORKSPACE} && runuser -u claudeuser -- env HOME=/home/claudeuser ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}" claude --append-system-prompt "${systemPrompt}" --model "claude-sonnet-4-20250514" -p "${taskPrompt}" --dangerously-skip-permissions --output-format stream-json --verbose`;
+    const claudeCommand = [
+      `cd ${WORKSPACE}`,
+      "&&",
+      "runuser -u claudeuser -- env HOME=/home/claudeuser",
+      `ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"`,
+      "claude",
+      `--append-system-prompt "${systemPrompt}"`,
+      "--model opus",
+      `-p "${taskPrompt}"`,
+      "--dangerously-skip-permissions",
+      "--output-format stream-json",
+      "--verbose",
+    ].join(" ");
 
-    const stream = await sandbox.execStream(cmd);
+    const stream = await sandbox.execStream(claudeCommand);
 
     // Tee the stream: one branch for background processing, one for HTTP response
     const [backgroundStream, responseStream] = stream.tee();
