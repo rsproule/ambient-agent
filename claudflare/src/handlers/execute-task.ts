@@ -4,18 +4,18 @@ import { Env } from "../types";
 import { runCmd, SandboxType } from "../utils/sandbox";
 import { escapeShell } from "../utils/strings";
 
-const USERNAME = "rsproule";
-const REPO = `MeritSpace/${USERNAME}`;
-const WORKSPACE = "/home/claudeuser/workspace";
+const REPO_BASE = "/home/claudeuser/repo";
+const WORKTREES_BASE = "/home/claudeuser/worktrees";
 
 /**
- * Consumes the stream fully and performs logging + commit at the end.
+ * Consumes the stream fully and cleans up worktree when done.
  * This runs via waitUntil() so it completes regardless of HTTP connection.
+ * Note: Claude is responsible for committing and pushing changes.
  */
-async function consumeAndCommit(
+async function consumeAndCleanup(
   stream: ReadableStream<Uint8Array>,
   sandbox: SandboxType,
-  branch: string,
+  worktreePath: string,
   task: string,
 ): Promise<void> {
   const reader = stream.getReader();
@@ -29,12 +29,12 @@ async function consumeAndCommit(
       chunks.push(decoder.decode(value, { stream: true }));
     }
 
-    console.log("[consumeAndCommit] Stream complete, writing log...");
+    console.log("[consumeAndCleanup] Stream complete, writing log...");
     const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
 
     // Write log file (redact secrets)
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const logDir = `${WORKSPACE}/.logs`;
+    const logDir = `${worktreePath}/.logs`;
     const logPath = `${logDir}/${timestamp}.json`;
     const redacted = chunks
       .join("")
@@ -49,33 +49,17 @@ async function consumeAndCommit(
       "write-log",
     );
 
-    // Commit and push
-    const msg = `Claude: ${task.substring(0, 50)}${
-      task.length > 50 ? "..." : ""
-    }`;
-    await runCmd(sandbox, run(`git -C ${WORKSPACE} add -A`), "git-add");
-
-    const diff = await runCmd(
+    // Cleanup: remove worktree after task completes
+    console.log("[consumeAndCleanup] Removing worktree...");
+    await runCmd(
       sandbox,
-      run(`git -C ${WORKSPACE} diff --cached --quiet; echo $?`),
-      "git-diff",
+      run(`git -C ${REPO_BASE} worktree remove --force ${worktreePath}`),
+      "worktree-remove",
     );
-    if (diff.stdout.trim() !== "0") {
-      await runCmd(
-        sandbox,
-        run(`git -C ${WORKSPACE} commit -m "${escapeShell(msg)}"`),
-        "git-commit",
-      );
-      await runCmd(
-        sandbox,
-        run(`git -C ${WORKSPACE} push origin ${branch}`),
-        "git-push",
-      );
-    }
 
-    console.log("[consumeAndCommit] Done");
+    console.log("[consumeAndCleanup] Done");
   } catch (error) {
-    console.error("[consumeAndCommit] Error:", error);
+    console.error("[consumeAndCleanup] Error:", error);
   }
 }
 
@@ -86,49 +70,90 @@ async function ensureUser(sandbox: SandboxType) {
   }
 }
 
-async function setupRepo(sandbox: SandboxType, token: string, branch: string) {
-  // Run git operations as claudeuser so ownership is correct from the start
+/**
+ * Ensures the main repo is cloned and up to date.
+ * This is the "bare" repo that worktrees are created from.
+ */
+async function setupMainRepo(
+  sandbox: SandboxType,
+  token: string,
+  repo: string,
+) {
   const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
 
   const check = await runCmd(
     sandbox,
-    `test -d ${WORKSPACE}/.git && echo exists || echo missing`,
+    `test -d ${REPO_BASE}/.git && echo exists || echo missing`,
     "repo-check",
   );
 
   if (check.stdout.trim() === "missing") {
+    // Clone for the first time
     const clone = await runCmd(
       sandbox,
       run(
-        `git clone https://x-access-token:${token}@github.com/${REPO}.git ${WORKSPACE}`,
+        `git clone https://x-access-token:${token}@github.com/${repo}.git ${REPO_BASE}`,
       ),
       "clone",
     );
     if (!clone.success) throw new Error(`Clone failed: ${clone.stderr}`);
   } else {
-    await runCmd(
-      sandbox,
-      run(`git -C ${WORKSPACE} reset --hard HEAD`),
-      "reset",
-    );
-    const pull = await runCmd(
-      sandbox,
-      run(`git -C ${WORKSPACE} pull origin ${branch}`),
-      "pull",
-    );
-    if (!pull.success) throw new Error(`Pull failed: ${pull.stderr}`);
+    // Fetch latest from remote
+    await runCmd(sandbox, run(`git -C ${REPO_BASE} fetch --all`), "fetch");
   }
 
+  // Configure git user
   await runCmd(
     sandbox,
-    run(`git -C ${WORKSPACE} config user.email "merit-bot@merit.systems"`),
+    run(`git -C ${REPO_BASE} config user.email "merit-bot@merit.systems"`),
     "config-email",
   );
   await runCmd(
     sandbox,
-    run(`git -C ${WORKSPACE} config user.name "Merit Bot"`),
+    run(`git -C ${REPO_BASE} config user.name "Merit Bot"`),
     "config-name",
   );
+
+  // Ensure worktrees directory exists
+  await runCmd(sandbox, run(`mkdir -p ${WORKTREES_BASE}`), "mkdir-worktrees");
+}
+
+/**
+ * Creates a worktree for this request on the specified branch.
+ * Returns the path to the worktree.
+ */
+async function createWorktree(
+  sandbox: SandboxType,
+  branch: string,
+  requestId: string,
+): Promise<string> {
+  const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
+  const worktreePath = `${WORKTREES_BASE}/${requestId}`;
+
+  // Check if branch exists on remote
+  const remoteRef = await runCmd(
+    sandbox,
+    run(`git -C ${REPO_BASE} ls-remote --heads origin ${branch}`),
+    "check-remote-branch",
+  );
+
+  if (remoteRef.stdout.includes(branch)) {
+    // Branch exists on remote, create worktree tracking it
+    await runCmd(
+      sandbox,
+      run(`git -C ${REPO_BASE} worktree add ${worktreePath} origin/${branch}`),
+      "worktree-add-existing",
+    );
+  } else {
+    // Branch doesn't exist, create new branch in worktree
+    await runCmd(
+      sandbox,
+      run(`git -C ${REPO_BASE} worktree add -b ${branch} ${worktreePath}`),
+      "worktree-add-new",
+    );
+  }
+
+  return worktreePath;
 }
 
 export async function handleExecuteTask(
@@ -141,28 +166,53 @@ export async function handleExecuteTask(
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const { ANTHROPIC_API_KEY, GITHUB_TOKEN } = env;
+  const { ANTHROPIC_API_KEY, GITHUB_TOKEN, DEFAULT_BRANCH = "master" } = env;
   if (!ANTHROPIC_API_KEY)
     return new Response("ANTHROPIC_API_KEY not set", { status: 500 });
   if (!GITHUB_TOKEN)
     return new Response("GITHUB_TOKEN not set", { status: 500 });
 
   try {
-    const body = (await request.json()) as { task?: string; branch?: string };
-    const { task, branch = "main" } = body;
+    const body = (await request.json()) as {
+      task?: string;
+      repo?: string;
+      branch?: string;
+    };
+    const { task, repo, branch = DEFAULT_BRANCH } = body;
     if (!task) return new Response("task required", { status: 400 });
+    if (!repo)
+      return new Response("repo required (format: owner/name)", {
+        status: 400,
+      });
 
-    const sessionId = crypto.randomUUID().slice(0, 8);
-    const sandbox = getSandbox(env.Sandbox, sessionId);
+    // Extract username from repo (e.g., "MeritSpace/rsproule" -> "rsproule")
+    const username = repo.split("/")[1];
+    if (!username)
+      return new Response("invalid repo format (expected: owner/name)", {
+        status: 400,
+      });
+
+    // Use username as sessionId to reuse sandbox per user (warm starts)
+    const sandbox = getSandbox(env.Sandbox, username);
+    const requestId = crypto.randomUUID().slice(0, 8);
 
     await sandbox.setEnvVars({ ANTHROPIC_API_KEY, GITHUB_TOKEN });
     await ensureUser(sandbox);
-    await setupRepo(sandbox, GITHUB_TOKEN, branch);
+    await setupMainRepo(sandbox, GITHUB_TOKEN, repo);
+    const worktreePath = await createWorktree(sandbox, branch, requestId);
 
-    const systemPrompt = escapeShell(WORKSPACE_SYSTEM(USERNAME));
+    // Create ~/workspace symlink pointing to this worktree for convenience
+    const run = (cmd: string) => `runuser -u claudeuser -- ${cmd}`;
+    await runCmd(
+      sandbox,
+      run(`ln -sfn ${worktreePath} /home/claudeuser/workspace`),
+      "symlink-workspace",
+    );
+
+    const systemPrompt = escapeShell(WORKSPACE_SYSTEM(username, branch));
     const taskPrompt = escapeShell(task);
     const claudeCommand = [
-      `cd ${WORKSPACE}`,
+      `cd ${worktreePath}`,
       "&&",
       "runuser -u claudeuser -- env HOME=/home/claudeuser",
       `ANTHROPIC_API_KEY="${ANTHROPIC_API_KEY}"`,
@@ -180,8 +230,10 @@ export async function handleExecuteTask(
     // Tee the stream: one branch for background processing, one for HTTP response
     const [backgroundStream, responseStream] = stream.tee();
 
-    // Background: consume full stream and commit (runs regardless of HTTP connection)
-    ctx.waitUntil(consumeAndCommit(backgroundStream, sandbox, branch, task));
+    // Background: consume stream and cleanup worktree when done
+    ctx.waitUntil(
+      consumeAndCleanup(backgroundStream, sandbox, worktreePath, task),
+    );
 
     // HTTP response: optional observer, can disconnect without affecting the task
     return new Response(responseStream, {

@@ -1,6 +1,7 @@
 export const WORKSPACE_SYSTEM = (
   username: string,
-) => `You are working in ${username}'s workspace at ~/workspace (MeritSpace/${username}).
+  branch: string,
+) => `You are working in ${username}'s workspace at ~/workspace (MeritSpace/${username}) on branch "${branch}".
 
 Directory structure:
 - tools/ - Custom scripts and utilities.
@@ -10,8 +11,14 @@ Directory structure:
 - .logs/ - Execution logs
 - .claude/ - Claude configuration and state
 
-Before getting started, always decide where the most relevant place to put the work is. 
+Before getting started, always decide where the most relevant place to put the work is.
 
-Changes are auto-committed and pushed when done. gh CLI is available.
+IMPORTANT: You are responsible for committing and pushing your changes when done.
+- Stage changes with: git add -A
+- Commit with a meaningful message: git commit -m "description of changes"
+- Push to remote: git push -u origin ${branch}
+- If there are merge conflicts, resolve them before pushing.
+
+gh CLI is available for GitHub operations.
 
 Be terse. No fluff.`;
