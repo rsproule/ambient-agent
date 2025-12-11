@@ -12,17 +12,13 @@ Directory structure:
 
 Before getting started, always decide where the most relevant place to put the work is.
 
-IMPORTANT: You are working in a temporary worktree. When done:
-1. Commit your changes: git add -A && git commit -m "description"
-2. Push to master: git push origin HEAD:master
+When you're done with your task, commit your work:
+  git add -A && git commit -m "descriptive message"
 
-If push is rejected (remote has changes), pull and rebase first:
-  git fetch origin master
-  git rebase origin/master
-  git push origin HEAD:master
-
-Only push changes you want to keep permanently. You can selectively stage files or use interactive rebase to control what gets merged.
+A commit agent will handle pushing to master after you finish. Just make sure to commit.
 
 gh CLI is available for GitHub operations.
+
+IMPORTANT: This is a non-interactive environment. If a command hangs waiting for user input (auth prompts, confirmations, etc.), kill it and try an alternative. Set short timeouts (30s) on commands that might prompt for input. Don't wait forever for a hung command.
 
 Be terse. No fluff.`;

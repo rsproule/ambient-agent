@@ -7,10 +7,20 @@ import { escapeShell } from "../utils/strings";
 const REPO_BASE = "/home/claudeuser/repo";
 const WORKTREES_BASE = "/home/claudeuser/worktrees";
 
+const COMMIT_AGENT_PROMPT = `You are a commit agent. Your ONLY job is to commit and push any uncommitted changes.
+
+1. Check for uncommitted changes: git status
+2. If there are changes:
+   - git add -A
+   - git commit -m "auto-commit: work from previous session"
+   - git push origin HEAD:master
+3. If push fails, rebase and retry: git fetch origin master && git rebase origin/master && git push origin HEAD:master
+
+Do nothing else. Just commit and push, then stop.`;
+
 /**
- * Consumes the stream fully and cleans up worktree when done.
+ * Consumes the stream fully, runs commit agent, then cleans up.
  * This runs via waitUntil() so it completes regardless of HTTP connection.
- * Note: Claude is responsible for committing and pushing changes.
  */
 async function consumeAndCleanup(
   stream: ReadableStream<Uint8Array>,
@@ -18,6 +28,7 @@ async function consumeAndCleanup(
   worktreePath: string,
   requestId: string,
   task: string,
+  anthropicKey: string,
 ): Promise<void> {
   const reader = stream.getReader();
   const events: string[] = [];
@@ -72,25 +83,44 @@ async function consumeAndCleanup(
       "write-log",
     );
 
-    // Commit and push logs to repo (with retry for concurrent pushes)
+    // Run commit agent to ensure all work is pushed
+    console.log("[consumeAndCleanup] Running commit agent...");
+    const commitPrompt = escapeShell(COMMIT_AGENT_PROMPT);
+    const commitCmd = [
+      `cd ${worktreePath}`,
+      "&&",
+      "runuser -u claudeuser -- env HOME=/home/claudeuser",
+      `ANTHROPIC_API_KEY="${anthropicKey}"`,
+      "claude",
+      `-p "${commitPrompt}"`,
+      "--dangerously-skip-permissions",
+      "--max-turns 5",
+    ].join(" ");
+
+    const commitAgentResult = await runCmd(sandbox, commitCmd, "commit-agent");
+    console.log(
+      "[consumeAndCleanup] Commit agent done:",
+      commitAgentResult.success ? "success" : "failed",
+    );
+
+    // Commit and push logs to repo
     console.log("[consumeAndCleanup] Committing logs...");
     await runCmd(
       sandbox,
       run(`git -C ${REPO_BASE} add .logs/`),
       "git-add-logs",
     );
-    const commitResult = await runCmd(
+    const logsStaged = await runCmd(
       sandbox,
       run(`git -C ${REPO_BASE} diff --cached --quiet; echo $?`),
       "git-check-staged",
     );
-    if (commitResult.stdout.trim() !== "0") {
+    if (logsStaged.stdout.trim() !== "0") {
       await runCmd(
         sandbox,
         run(`git -C ${REPO_BASE} commit -m "logs: ${requestId}"`),
         "git-commit-logs",
       );
-      // Pull-rebase then push to handle concurrent log commits
       await runCmd(
         sandbox,
         run(`git -C ${REPO_BASE} pull --rebase origin HEAD || true`),
@@ -287,6 +317,7 @@ export async function handleExecuteTask(
         worktreePath,
         requestId,
         task,
+        ANTHROPIC_API_KEY,
       ),
     );
 
