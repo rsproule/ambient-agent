@@ -177,6 +177,48 @@ async function initializeWorkspaceStructure(
 }
 
 /**
+ * Rename a branch in a GitHub repository
+ */
+async function renameDefaultBranch(
+  repo: string,
+  token: string,
+  oldName: string,
+  newName: string,
+): Promise<boolean> {
+  try {
+    const response = await fetch(
+      `https://api.github.com/repos/${MERITSPACE_ORG}/${repo}/branches/${oldName}/rename`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          new_name: newName,
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.warn(
+        `Failed to rename branch from ${oldName} to ${newName}:`,
+        error,
+      );
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.warn(`Error renaming branch:`, error);
+    return false;
+  }
+}
+
+/**
  * Create a GitHub repository in the MeritSpace org with default structure
  */
 export async function createWorkspaceRepo(
@@ -233,6 +275,9 @@ export async function createWorkspaceRepo(
     // Wait a moment for GitHub to initialize the repo
     if (!repoExists) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Rename default branch from main to master (claudflare expects master)
+      await renameDefaultBranch(username, token, "main", "master");
     }
 
     // Initialize the workspace structure
@@ -300,7 +345,7 @@ export async function resetWorkspaceRepo(
     }
 
     const repo = await repoResponse.json();
-    const defaultBranch = repo.default_branch || "main";
+    const defaultBranch = repo.default_branch || "master";
 
     // Get the current commit SHA
     const refResponse = await fetch(
