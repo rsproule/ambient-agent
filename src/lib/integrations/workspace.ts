@@ -13,36 +13,262 @@ const MERITSPACE_ORG = meritSpaceConfig.org;
  * Default workspace directory structure
  */
 const WORKSPACE_STRUCTURE = [
+  // CLAUDE.md - Read automatically by Claude Code, enforces project rules
+  {
+    path: "CLAUDE.md",
+    content: (username: string) => `# ${username}'s Workspace
+
+This is a persistent workspace. All changes are committed to GitHub.
+
+## CRITICAL: Directory Structure
+
+\`\`\`
+public/           <- DEPLOYED (Vite + React app)
+  src/
+    apps/         <- ADD NEW APPS HERE as folders
+    App.tsx       <- ADD ROUTES HERE for new apps
+notes/            <- NOT deployed - documentation
+tools/            <- NOT deployed - scripts/utilities
+.logs/            <- Auto-generated logs
+\`\`\`
+
+## Rules
+
+1. **Web apps go in \`public/src/apps/\`** - Create a folder, add components
+2. **Register routes in \`public/src/App.tsx\`** - Import and add Route
+3. **Scripts/tools go in \`tools/\`** - Not deployed
+4. **Notes/docs go in \`notes/\`** - Not deployed
+5. **Never modify \`.logs/\` or \`.claude/\`** - System managed
+
+## Adding a New App
+
+\`\`\`bash
+# 1. Create the app folder
+mkdir -p public/src/apps/myapp
+
+# 2. Create the main component
+cat > public/src/apps/myapp/index.tsx << 'EOF'
+export default function MyApp() {
+  return <div>My App</div>
+}
+EOF
+
+# 3. Edit public/src/App.tsx to add:
+#    - Import: import MyApp from './apps/myapp'
+#    - Route: <Route path="/apps/myapp/*" element={<MyApp />} />
+#    - Manifest entry in the apps array
+\`\`\`
+
+## Building & Testing
+
+\`\`\`bash
+cd public
+npm install    # First time only
+npm run dev    # Local dev server
+npm run build  # Production build
+\`\`\`
+`,
+  },
   {
     path: "README.md",
     content: (username: string) => `# ${username}'s Workspace
 
-This is your persistent Claude workspace. Any code, files, or projects created here will be saved and available for future sessions.
+This is your persistent Claude workspace. Code and projects here are saved across sessions.
 
-## Directory Structure
+See [CLAUDE.md](./CLAUDE.md) for directory structure and rules.
 
-- \`tools/\` - Custom scripts and utilities
-- \`projects/\` - Your coding projects
-- \`notes/\` - Documentation and notes
-- \`.logs/\` - Execution logs (auto-generated)
-- \`.claude/\` - Claude configuration and state
+## Quick Start
 
-## Getting Started
+- Web apps: \`public/src/apps/\`
+- Scripts: \`tools/\`
+- Notes: \`notes/\`
 
-Ask Claude to help you with any coding task. All changes will be automatically committed to this repository.
+All changes are auto-committed to GitHub.
+`,
+  },
+  // Vite + React app in public/
+  {
+    path: "public/package.json",
+    content: (username: string) =>
+      JSON.stringify(
+        {
+          name: `${username}-workspace`,
+          private: true,
+          version: "0.0.1",
+          type: "module",
+          scripts: {
+            dev: "vite",
+            build: "vite build",
+            preview: "vite preview",
+          },
+          dependencies: {
+            react: "^18.2.0",
+            "react-dom": "^18.2.0",
+            "react-router-dom": "^6.20.0",
+          },
+          devDependencies: {
+            "@types/react": "^18.2.0",
+            "@types/react-dom": "^18.2.0",
+            "@vitejs/plugin-react": "^4.2.0",
+            typescript: "^5.3.0",
+            vite: "^5.0.0",
+          },
+        },
+        null,
+        2,
+      ),
+  },
+  {
+    path: "public/vite.config.ts",
+    content: () => `import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
+
+export default defineConfig({
+  plugins: [react()],
+})
 `,
   },
   {
-    path: "tools/.gitkeep",
-    content: () => "# Custom tools and scripts\n",
+    path: "public/tsconfig.json",
+    content: () =>
+      JSON.stringify(
+        {
+          compilerOptions: {
+            target: "ES2020",
+            useDefineForClassFields: true,
+            lib: ["ES2020", "DOM", "DOM.Iterable"],
+            module: "ESNext",
+            skipLibCheck: true,
+            moduleResolution: "bundler",
+            allowImportingTsExtensions: true,
+            resolveJsonModule: true,
+            isolatedModules: true,
+            noEmit: true,
+            jsx: "react-jsx",
+            strict: true,
+            noUnusedLocals: true,
+            noUnusedParameters: true,
+            noFallthroughCasesInSwitch: true,
+          },
+          include: ["src"],
+        },
+        null,
+        2,
+      ),
   },
   {
-    path: "projects/.gitkeep",
-    content: () => "# Your coding projects\n",
+    path: "public/index.html",
+    content: (username: string) => `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>${username}'s Apps</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+`,
   },
+  {
+    path: "public/src/main.tsx",
+    content: () => `import React from 'react'
+import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import App from './App'
+import './index.css'
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </React.StrictMode>,
+)
+`,
+  },
+  {
+    path: "public/src/App.tsx",
+    content: (
+      username: string,
+    ) => `import { Routes, Route, Link } from 'react-router-dom'
+
+// Import your apps here
+// import MyApp from './apps/myapp'
+
+const apps = [
+  // Add your apps to this manifest
+  // { name: 'My App', path: '/apps/myapp', description: 'Description here' },
+]
+
+function Home() {
+  return (
+    <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif' }}>
+      <h1>${username}'s Apps</h1>
+      {apps.length === 0 ? (
+        <p style={{ color: '#666' }}>No apps yet. Create one in src/apps/</p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0 }}>
+          {apps.map((app) => (
+            <li key={app.path} style={{ marginBottom: '1rem' }}>
+              <Link to={app.path} style={{ fontSize: '1.2rem' }}>{app.name}</Link>
+              <p style={{ margin: '0.25rem 0', color: '#666' }}>{app.description}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      {/* Add routes for your apps here */}
+      {/* <Route path="/apps/myapp/*" element={<MyApp />} /> */}
+    </Routes>
+  )
+}
+`,
+  },
+  {
+    path: "public/src/index.css",
+    content: () => `* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+}
+
+a {
+  color: #0066cc;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+`,
+  },
+  {
+    path: "public/src/apps/.gitkeep",
+    content: () => "# Add your sub-apps here as folders\n",
+  },
+  // Non-deployed folders
   {
     path: "notes/.gitkeep",
     content: () => "# Documentation and notes\n",
+  },
+  {
+    path: "tools/.gitkeep",
+    content: () => "# Scripts and utilities\n",
   },
   {
     path: ".logs/.gitkeep",
@@ -316,7 +542,7 @@ export function getWorkspaceRepoUrl(username: string): string {
 
 /**
  * Reset a workspace to its initial state (preserves git history)
- * Creates a new commit that restores the default structure
+ * Creates a new commit that completely replaces the tree with the default structure
  */
 export async function resetWorkspaceRepo(
   username: string,
@@ -366,15 +592,74 @@ export async function resetWorkspaceRepo(
     const ref = await refResponse.json();
     const parentSha = ref.object.sha;
 
-    // Build the tree for the initial workspace structure
-    const treeItems = WORKSPACE_STRUCTURE.map((file) => ({
-      path: file.path,
-      mode: "100644" as const,
-      type: "blob" as const,
-      content: file.content(username),
-    }));
+    // Get the current tree to find all existing files
+    const currentCommitResponse = await fetch(
+      `https://api.github.com/repos/${MERITSPACE_ORG}/${username}/git/commits/${parentSha}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
 
-    // Create a new tree
+    if (!currentCommitResponse.ok) {
+      return { success: false, error: "Could not get current commit" };
+    }
+
+    const currentCommit = await currentCommitResponse.json();
+
+    // Get the full tree recursively
+    const currentTreeResponse = await fetch(
+      `https://api.github.com/repos/${MERITSPACE_ORG}/${username}/git/trees/${currentCommit.tree.sha}?recursive=1`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+      },
+    );
+
+    if (!currentTreeResponse.ok) {
+      return { success: false, error: "Could not get current tree" };
+    }
+
+    const currentTree = await currentTreeResponse.json();
+
+    // Build tree items: first delete all existing files, then add new ones
+    const treeItems: Array<{
+      path: string;
+      mode: "100644";
+      type: "blob";
+      sha?: string | null;
+      content?: string;
+    }> = [];
+
+    // Mark all existing files for deletion (sha: null)
+    for (const item of currentTree.tree) {
+      if (item.type === "blob") {
+        treeItems.push({
+          path: item.path,
+          mode: "100644",
+          type: "blob",
+          sha: null, // This deletes the file
+        });
+      }
+    }
+
+    // Add all files from WORKSPACE_STRUCTURE
+    for (const file of WORKSPACE_STRUCTURE) {
+      treeItems.push({
+        path: file.path,
+        mode: "100644",
+        type: "blob",
+        content: file.content(username),
+      });
+    }
+
+    // Create a new tree based on the current tree with our modifications
     const treeResponse = await fetch(
       `https://api.github.com/repos/${MERITSPACE_ORG}/${username}/git/trees`,
       {
@@ -386,6 +671,7 @@ export async function resetWorkspaceRepo(
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          base_tree: currentCommit.tree.sha,
           tree: treeItems,
         }),
       },
