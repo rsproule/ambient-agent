@@ -2,6 +2,7 @@ import type { Agent } from "@/src/ai/agents/types";
 import { getAppForContext } from "@/src/ai/apps";
 import {
   createCalendarTools,
+  createClaudeTaskTool,
   createCompleteOnboardingTool,
   createGenerateConnectionLinkTool,
   createGetUserContextTool,
@@ -97,6 +98,8 @@ export async function respondToMessage(
     ...createNegotiationTools(context),
     // Workspace tools (claim/manage Claude workspace)
     ...createWorkspaceTools(context),
+    // Claude task execution tool
+    claude_task: createClaudeTaskTool(context),
   };
 
   // Add DM-only tools (connection link not available in groups to prevent spam)

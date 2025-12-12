@@ -6,10 +6,11 @@
  */
 
 export * from "./tasks/debouncedResponse";
+export * from "./tasks/executeClaudeTask";
 export * from "./tasks/handleMessage";
+export * from "./tasks/notifyUserOfResearch";
 export * from "./tasks/processMessages";
 export * from "./tasks/runResearchJob";
-export * from "./tasks/notifyUserOfResearch";
 
 // Proactive notification tasks
 export * from "./tasks/proactiveScheduler";
