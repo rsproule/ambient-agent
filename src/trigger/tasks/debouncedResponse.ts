@@ -75,6 +75,9 @@ const TOOL_LOADING_MESSAGES: Record<string, string[]> = {
     "checking your reminders...",
     "looking at scheduled items...",
   ],
+
+  // Claude task execution
+  claude_task: ["starting that up...", "spinning up claude...", "on it..."],
 };
 
 /**

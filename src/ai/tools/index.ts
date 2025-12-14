@@ -10,6 +10,7 @@
  * - Create and manage scheduled jobs
  * - Configure group chat settings
  * - Record feature requests from users
+ * - Execute coding tasks in persistent workspaces
  *
  * Security: User-identity-sensitive tools are context-bound factories.
  * The phone number is taken from authenticated context, not user input,
@@ -17,6 +18,7 @@
  */
 
 // Context-bound tools (identity from system context, cannot be spoofed)
+export { createClaudeTaskTool } from "./claudeTask";
 export { createCompleteOnboardingTool } from "./completeOnboarding";
 export { createGenerateConnectionLinkTool } from "./generateConnectionLink";
 export { createGetUserContextTool } from "./getUserContext";
