@@ -125,8 +125,22 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
+  // Handle SPA routing - serve index.html for all routes
+  appType: 'spa',
 })
 `,
+  },
+  // Vercel config for SPA routing in production
+  {
+    path: "public/vercel.json",
+    content: () =>
+      JSON.stringify(
+        {
+          rewrites: [{ source: "/(.*)", destination: "/index.html" }],
+        },
+        null,
+        2,
+      ),
   },
   {
     path: "public/tsconfig.json",
